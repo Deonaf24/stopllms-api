@@ -1,0 +1,17 @@
+fastapi
+uvicorn
+ollama
+python-dotenv
+python-multipart
+python-jose[cryptography]
+passlib[bcrypt]
+requests
+langchain
+langchain-core
+langchain-ollama
+langchain-chroma
+pypdf
+chromadb
+pytest
+langchain-community
+pydantic-settings
