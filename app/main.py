@@ -10,4 +10,8 @@ def create_app() -> FastAPI:
 
 app = create_app()
 
+@app.get("/healthz")
+def healthz():
+    return {"ok": True}
+
 
