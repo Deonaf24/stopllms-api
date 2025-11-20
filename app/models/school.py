@@ -1,0 +1,117 @@
+from __future__ import annotations
+
+from datetime import datetime
+
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Table, Text, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from .base import Base
+
+class_students = Table(
+    "class_students",
+    Base.metadata,
+    Column("class_id", ForeignKey("classes.id", ondelete="CASCADE"), primary_key=True),
+    Column("student_id", ForeignKey("students.id", ondelete="CASCADE"), primary_key=True),
+)
+
+
+class TimestampMixin:
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class Teacher(TimestampMixin, Base):
+    __tablename__ = "teachers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+
+    classes: Mapped[list[Class]] = relationship("Class", back_populates="teacher")
+    assignments: Mapped[list[Assignment]] = relationship(
+        "Assignment", back_populates="teacher"
+    )
+
+    def __repr__(self) -> str:
+        return f"<Teacher id={self.id} email={self.email!r}>"
+
+
+class Student(TimestampMixin, Base):
+    __tablename__ = "students"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+
+    classes: Mapped[list[Class]] = relationship(
+        secondary=class_students, back_populates="students"
+    )
+
+    def __repr__(self) -> str:
+        return f"<Student id={self.id} email={self.email!r}>"
+
+
+class Class(TimestampMixin, Base):
+    __tablename__ = "classes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    teacher_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("teachers.id", ondelete="SET NULL"), nullable=True
+    )
+
+    teacher: Mapped[Teacher | None] = relationship("Teacher", back_populates="classes")
+    students: Mapped[list[Student]] = relationship(
+        secondary=class_students, back_populates="classes"
+    )
+    assignments: Mapped[list[Assignment]] = relationship(
+        "Assignment", back_populates="class_", cascade="all, delete-orphan"
+    )
+
+    def __repr__(self) -> str:
+        return f"<Class id={self.id} name={self.name!r}>"
+
+
+class Assignment(TimestampMixin, Base):
+    __tablename__ = "assignments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    class_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("classes.id", ondelete="CASCADE"), nullable=False
+    )
+    teacher_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("teachers.id", ondelete="SET NULL"), nullable=True
+    )
+
+    class_: Mapped[Class] = relationship("Class", back_populates="assignments")
+    teacher: Mapped[Teacher | None] = relationship("Teacher", back_populates="assignments")
+    files: Mapped[list[File]] = relationship(
+        "File", back_populates="assignment", cascade="all, delete-orphan"
+    )
+
+    def __repr__(self) -> str:
+        return f"<Assignment id={self.id} title={self.title!r}>"
+
+
+class File(TimestampMixin, Base):
+    __tablename__ = "files"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    path: Mapped[str] = mapped_column(String(512), nullable=False)
+    assignment_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("assignments.id", ondelete="CASCADE"), nullable=False
+    )
+
+    assignment: Mapped[Assignment] = relationship("Assignment", back_populates="files")
+
+    def __repr__(self) -> str:
+        return f"<File id={self.id} filename={self.filename!r}>"
