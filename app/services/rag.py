@@ -3,7 +3,7 @@ from pypdf import PdfReader
 from io import BytesIO
 from langchain_core.documents import Document
 from app.RAG.rag_ingest import split_documents, attach_chunk_ids
-from app.RAG.rag_db import update_db
+from app.RAG.rag_db import update_db, clear_db
 
 async def ingest_file(file: UploadFile):
     #read the pdf
@@ -25,8 +25,6 @@ async def ingest_file(file: UploadFile):
     
     return added
 
-
-
-    
-
-
+async def clear_databased() -> bool :
+    cleared = clear_db()
+    return cleared

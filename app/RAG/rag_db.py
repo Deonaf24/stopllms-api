@@ -41,6 +41,21 @@ def update_db(chunks_with_ids: List[Document]) -> int:
     db.add_documents(new_chunks, ids=new_ids)
     return len(new_ids)
 
+def clear_db() -> bool:
+    """Delete all stored documents in the current Chroma collection but keep the collection schema."""
+    db = get_db()
+    all_ids = list(get_existing_ids(db))
+    if not all_ids:
+        print("No documents found in the Chroma DB.")
+        return
+
+    db.delete(ids=all_ids)
+    if (stats_db() == 0):
+        return True
+    else:
+        return False
+
+
 def stats_db() -> int:
     db = get_db()
     return len(get_existing_ids(db))

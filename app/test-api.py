@@ -1,6 +1,7 @@
-from RAG.rag_db import get_db
+from RAG.rag_db import get_db, clear_db
 
 db = get_db()
 
 docs = db.similarity_search("vertex cover LP dual")
-print(docs[0].page_content)
+
+clear_db()
