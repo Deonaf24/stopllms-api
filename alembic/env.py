@@ -3,9 +3,13 @@ from __future__ import annotations
 import os
 import sys
 from logging.config import fileConfig
+from dotenv import load_dotenv
 
 from sqlalchemy import engine_from_config, pool
 from alembic import context
+
+# load environment variables
+load_dotenv()
 
 # Ensure the app package is importable
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
