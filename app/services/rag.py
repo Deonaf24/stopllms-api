@@ -1,9 +1,11 @@
 from fastapi import UploadFile
-from pypdf import PdfReader
 from io import BytesIO
+from pypdf import PdfReader
 from langchain_core.documents import Document
-from app.RAG.rag_ingest import split_documents, attach_chunk_ids
+
 from app.RAG.rag_db import update_db
+from app.RAG.rag_ingest import attach_chunk_ids, split_documents
+
 
 async def ingest_file(file: UploadFile):
     #read the pdf
