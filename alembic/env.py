@@ -10,7 +10,7 @@ from alembic import context
 # Ensure the app package is importable
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from app.models import Base  # noqa: E402
+from app.core.db import Base  # noqa: E402
 
 config = context.config
 fileConfig(config.config_file_name)
