@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from datetime import timedelta
 from app.core.security import authenticate_user, create_access_token
 from app.core.deps import get_current_active_user
+from app.models.school import Student, Teacher
 from app.schemas.auth import Token, User, UserCreate
 from fastapi.security import OAuth2PasswordRequestForm
 from app.core.config import settings
@@ -32,14 +33,12 @@ async def read_users_me(current_user: User = Depends(get_current_active_user)):
 async def register_user(new_user: UserCreate):
     with SessionLocal() as db:
         new_user_db = auth_service.create_user(db, new_user)
-        if new_user.is_teacher:
-            new_teacher = TeacherCreate(
-            user_id=new_user_db.id,
-            )
-            school_service.create_teacher(db, new_teacher)
-        else:
-            new_student = StudentCreate(
-                user_id=new_user_db.id
-            )
-            school_service.create_student(db, new_student)
-        return new_user_db
+
+        return {
+            "id": new_user_db.id,
+            "username": new_user_db.username,
+            "email": new_user_db.email,
+            "is_teacher": new_user.is_teacher,
+            "disabled": new_user_db.disabled,
+        }
+

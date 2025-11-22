@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, EmailStr
 
 
 class TimestampModel(BaseModel):
@@ -16,8 +16,10 @@ class TimestampModel(BaseModel):
 class TeacherBase(BaseModel):
     pass
 
-class TeacherCreate(TeacherBase):
+class TeacherCreate(BaseModel):
     user_id: int
+    name: str
+    email: EmailStr
 
 class TeacherRead(TeacherBase, TimestampModel):
     id: int
@@ -29,8 +31,10 @@ class TeacherRead(TeacherBase, TimestampModel):
 class StudentBase(BaseModel):
     pass
 
-class StudentCreate(StudentBase):
+class StudentCreate(BaseModel):
     user_id: int
+    name: str # MUST BE ADDED
+    email: EmailStr # MUST BE ADDED
 
 class StudentRead(StudentBase, TimestampModel):
     id: int
