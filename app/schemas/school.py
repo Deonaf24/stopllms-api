@@ -14,31 +14,27 @@ class TimestampModel(BaseModel):
 
 
 class TeacherBase(BaseModel):
-    name: str
-    email: str
-
-
-class TeacherCreate(TeacherBase):
     pass
 
+class TeacherCreate(TeacherBase):
+    user_id: int
 
 class TeacherRead(TeacherBase, TimestampModel):
     id: int
+    user_id: int
     class_ids: List[int] = Field(default_factory=list)
     assignment_ids: List[int] = Field(default_factory=list)
 
 
 class StudentBase(BaseModel):
-    name: str
-    email: str
-
-
-class StudentCreate(StudentBase):
     pass
 
+class StudentCreate(StudentBase):
+    user_id: int
 
 class StudentRead(StudentBase, TimestampModel):
     id: int
+    user_id: int
     class_ids: List[int] = Field(default_factory=list)
 
 

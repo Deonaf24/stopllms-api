@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Table, Text, func
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Table, Text, func, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
@@ -23,6 +23,36 @@ class TimestampMixin:
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
+class User(TimestampMixin, Base):
+    __tablename__ = "users"
+
+    # Primary Key
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+
+    # Authentication Fields (Unique and required for login)
+    username: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    
+    # SECURITY FIELD: Stores the hashed password
+    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    
+    # State/Permissions
+    disabled: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # Relationship for Teacher
+    teacher_link: Mapped[Teacher] = relationship(
+        "Teacher", 
+        back_populates="user_account"
+    )
+
+    # Relationship for Student
+    student_link: Mapped[Student] = relationship(
+        "Student", 
+        back_populates="user_account"
+    )
+
+    def __repr__(self) -> str:
+        return f"<User id={self.id} username={self.username!r}>"
 
 class Teacher(TimestampMixin, Base):
     __tablename__ = "teachers"
@@ -30,6 +60,9 @@ class Teacher(TimestampMixin, Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
+    user_account: Mapped[User] = relationship("User", back_populates="teacher_link")
 
     classes: Mapped[list[Class]] = relationship("Class", back_populates="teacher")
     assignments: Mapped[list[Assignment]] = relationship(
@@ -46,6 +79,9 @@ class Student(TimestampMixin, Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
+    user_account: Mapped[User] = relationship("User", back_populates="student_link")
 
     classes: Mapped[list[Class]] = relationship(
         secondary=class_students, back_populates="students"
