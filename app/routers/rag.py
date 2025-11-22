@@ -1,7 +1,10 @@
 from fastapi import APIRouter, Depends, UploadFile
 
 from app.core.deps import get_current_active_user
-from app.services.rag import ingest_file
+from app.services.prompts import build_prompt
+from app.services.llm import ollama_generate
+from app.services.rag import ingest_file, clear_databased
+from typing import Annotated
 
 router = APIRouter()
 
@@ -12,4 +15,13 @@ async def create_upload_file(
     current_user=Depends(get_current_active_user),
 ):
     added = await ingest_file(file)
-    return {"filename": file.filename, "chunks_added": added}
+    return {"filename": file.filename}
+
+@router.delete("/clear")
+async def clear_database(current_user = Depends(get_current_active_user)):
+    cleared = await clear_databased
+    return cleared
+
+@router.delete("/delete")
+async def delete_file():
+    ...

@@ -6,7 +6,7 @@ DB_DIR  = Path("/Users/deon/Documents/Models/Icarus-API/app/RAG/chroma_langchain
 
 # your ollama models
 EMBED_MODEL = "mxbai-embed-large"   # Find an Embed model
-LLM_MODEL   = "icarus"
+LLM_MODEL   = "icarus-v2"
 
 # chunking
 CHUNK_SIZE = 800

@@ -2,6 +2,8 @@ from fastapi import UploadFile
 from io import BytesIO
 from pypdf import PdfReader
 from langchain_core.documents import Document
+from app.RAG.rag_ingest import split_documents, attach_chunk_ids
+from app.RAG.rag_db import update_db, clear_db
 
 from app.RAG.rag_db import update_db
 from app.RAG.rag_ingest import attach_chunk_ids, split_documents
@@ -27,8 +29,6 @@ async def ingest_file(file: UploadFile):
     
     return added
 
-
-
-    
-
-
+async def clear_databased() -> bool :
+    cleared = clear_db()
+    return cleared
