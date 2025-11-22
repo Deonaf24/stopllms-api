@@ -42,14 +42,24 @@ class User(TimestampMixin, Base):
     # Relationship for Teacher
     teacher_link: Mapped[Teacher] = relationship(
         "Teacher", 
-        back_populates="user_account"
+        back_populates="user_account",
+        uselist=False
     )
 
     # Relationship for Student
     student_link: Mapped[Student] = relationship(
         "Student", 
-        back_populates="user_account"
+        back_populates="user_account",
+        uselist=False
     )
+
+    @property
+    def is_teacher(self) -> bool:
+        # Falls back gently to no-profile
+        try:
+            return self.teacher_link is not None
+        except:
+            return False
 
     def __repr__(self) -> str:
         return f"<User id={self.id} username={self.username!r}>"

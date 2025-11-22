@@ -7,16 +7,23 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     username: str | None = None
 
+# --------------------
+# PUBLIC SCHEMAS
+# --------------------
+
 class User(BaseModel):
+    id: int
     username: str
-    email: str | None = None
-    full_name: str | None = None
-    hashed_password: str
-    disabled: bool | None = None
+    email: EmailStr
+    is_teacher: bool
+    disabled: bool
+
+# --------------------
+# INPUT SCHEMAS
+# --------------------
 
 class UserCreate(BaseModel):
     username: str
     email: EmailStr
     password: str
-    password_confirm: str
     is_teacher: bool
