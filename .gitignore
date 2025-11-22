@@ -1,3 +1,5 @@
 __pycache__/
 *.pyc
 venv/
+app/RAG/chroma_langchain_db/
+app.db
