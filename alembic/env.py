@@ -3,20 +3,34 @@ from __future__ import annotations
 import os
 import sys
 from logging.config import fileConfig
+from dotenv import load_dotenv
 
 from sqlalchemy import engine_from_config, pool
 from alembic import context
 
+# load environment variables
+load_dotenv()
+
 # Ensure the app package is importable
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from app.models import Base  # noqa: E402
+from app.core.config import settings  # noqa: E402
+from app.core.db import Base  # noqa: E402
 
 config = context.config
 fileConfig(config.config_file_name)
 
-# Prefer environment variable for runtime database URLs.
-database_url = os.getenv("DATABASE_URL", config.get_main_option("sqlalchemy.url"))
+# Prefer environment variable for runtime database URLs, falling back to Alembic ini
+# and then to the application's default settings.
+database_url = (
+    os.getenv("DATABASE_URL")
+    or config.get_main_option("sqlalchemy.url")
+    or settings.DATABASE_URL
+)
+
+if not database_url:
+    raise RuntimeError("DATABASE_URL is not set for Alembic migrations")
+
 config.set_main_option("sqlalchemy.url", database_url)
 
 target_metadata = Base.metadata

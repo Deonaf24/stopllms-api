@@ -2,15 +2,20 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from datetime import timedelta
 from app.core.security import authenticate_user, create_access_token
 from app.core.deps import get_current_active_user
-from app.schemas.auth import Token, User
+from app.models.school import Student, Teacher
+from app.schemas.auth import Token, User, UserCreate
 from fastapi.security import OAuth2PasswordRequestForm
 from app.core.config import settings
-from app.core.security import db
+from app.schemas.school import StudentCreate, TeacherCreate
+from app.services import auth as auth_service
+from app.services import school as school_service
+from app.core.db import SessionLocal
 
 router = APIRouter()
 
 @router.post("/token", response_model=Token)
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
+    print("authenticating")
     user = authenticate_user(form_data.username, form_data.password)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
@@ -23,3 +28,17 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
 @router.get("/users/me/", response_model=User)
 async def read_users_me(current_user: User = Depends(get_current_active_user)):
     return current_user
+
+@router.post("/register", response_model=User)
+async def register_user(new_user: UserCreate):
+    with SessionLocal() as db:
+        new_user_db = auth_service.create_user(db, new_user)
+
+        return {
+            "id": new_user_db.id,
+            "username": new_user_db.username,
+            "email": new_user_db.email,
+            "is_teacher": new_user.is_teacher,
+            "disabled": new_user_db.disabled,
+        }
+
