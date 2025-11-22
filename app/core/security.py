@@ -39,7 +39,7 @@ def get_user(username: str):
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
 
-def get_passowrd_hash(password):
+def get_password_hash(password):
     return pwd_context.hash(password)
     
 def authenticate_user(username: str, password: str):
