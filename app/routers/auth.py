@@ -8,8 +8,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from app.core.config import settings
 from app.schemas.school import StudentCreate, TeacherCreate
 from app.services import auth as auth_service
-from app.services import school as school_service
-from app.core.db import SessionLocal
+from app.core.db import SessionLocal, Session, get_db
 
 router = APIRouter()
 
@@ -42,3 +41,22 @@ async def register_user(new_user: UserCreate):
             "disabled": new_user_db.disabled,
         }
 
+@router.get("/users", response_model=list[User])
+def list_users(db: Session = Depends(get_db)):
+    users = auth_service.list_users(db)
+    return [user for user in users]
+
+
+@router.get("/users/{user_id}", response_model=User)
+def get_user(user_id: int, db: Session = Depends(get_db)):
+    user = auth_service.get_user(db, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    return user
+
+@router.delete("/users/{user_id}", response_model=User)
+def delete_user(user_id: int, db: Session = Depends(get_db)):
+    user = auth_service.delete_user(db, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    return user

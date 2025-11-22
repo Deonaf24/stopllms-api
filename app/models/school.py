@@ -43,14 +43,16 @@ class User(TimestampMixin, Base):
     teacher_link: Mapped[Teacher] = relationship(
         "Teacher", 
         back_populates="user_account",
-        uselist=False
+        uselist=False,
+        cascade="all, delete",
     )
 
     # Relationship for Student
     student_link: Mapped[Student] = relationship(
         "Student", 
         back_populates="user_account",
-        uselist=False
+        uselist=False,
+        cascade="all, delete",
     )
 
     @property
@@ -71,7 +73,13 @@ class Teacher(TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
 
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
+    user_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False
+    )
+
     user_account: Mapped[User] = relationship("User", back_populates="teacher_link")
 
     classes: Mapped[list[Class]] = relationship("Class", back_populates="teacher")
@@ -90,7 +98,12 @@ class Student(TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
 
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
+    user_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False
+    )
     user_account: Mapped[User] = relationship("User", back_populates="student_link")
 
     classes: Mapped[list[Class]] = relationship(
