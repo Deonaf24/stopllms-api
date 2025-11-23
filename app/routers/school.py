@@ -98,6 +98,25 @@ def enroll_student(class_id: int, student_id: int, db: Session = Depends(get_db)
     updated_class = school_service.enroll_student(db, class_obj, student)
     return school_service.class_to_schema(updated_class)
 
+@router.post("/classes/join", response_model=ClassRead)
+def join_class_by_code(
+    join_code: str,
+    student_id: int,
+    db: Session = Depends(get_db)
+):
+    class_obj = school_service.get_class_by_join_code(db, join_code)
+    if not class_obj:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invalid join code")
+
+    student = school_service.get_student(db, student_id)
+    if not student:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
+
+    updated = school_service.enroll_student(db, class_obj, student)
+    return school_service.class_to_schema(updated)
+
+
+
 
 @router.post(
     "/assignments", response_model=AssignmentRead, status_code=status.HTTP_201_CREATED
@@ -120,6 +139,9 @@ def get_assignment(assignment_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
     return school_service.assignment_to_schema(assignment)
 
+# ============================================================
+# FILES (metadata only — not file upload)
+# ============================================================
 
 @router.post("/files", response_model=FileRead, status_code=status.HTTP_201_CREATED)
 def create_file(file_in: FileCreate, db: Session = Depends(get_db)):
