@@ -46,7 +46,8 @@ class ClassBase(BaseModel):
     name: str
     description: Optional[str] = None
     teacher_id: Optional[int] = None
-    join_code: str
+    join_code: Optional[str] = None
+
 
 
 class ClassCreate(ClassBase):
