@@ -1,8 +1,12 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from pathlib import Path
+from uuid import uuid4
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.db import get_db
 from app.schemas.school import (
     AssignmentCreate,
@@ -146,6 +150,11 @@ def get_assignment(assignment_id: int, db: Session = Depends(get_db)):
 
 @router.post("/files", response_model=FileRead, status_code=status.HTTP_201_CREATED)
 def create_file(file_in: FileCreate, db: Session = Depends(get_db)):
+    assignment = school_service.get_assignment(db, file_in.assignment_id)
+    if not assignment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found"
+        )
     file = school_service.create_file(db, file_in)
     return school_service.file_to_schema(file)
 
@@ -161,4 +170,44 @@ def get_file(file_id: int, db: Session = Depends(get_db)):
     file = school_service.get_file(db, file_id)
     if not file:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+    return school_service.file_to_schema(file)
+
+
+@router.post(
+    "/files/upload", response_model=FileRead, status_code=status.HTTP_201_CREATED
+)
+async def upload_file(
+    assignment_id: int = Form(...),
+    upload: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    assignment = school_service.get_assignment(db, assignment_id)
+    if not assignment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found"
+        )
+
+    storage_dir = Path(settings.FILE_STORAGE_DIR)
+    storage_dir.mkdir(parents=True, exist_ok=True)
+
+    original_name = upload.filename or "upload"
+    safe_name = Path(original_name).name
+    storage_name = f"{uuid4().hex}_{safe_name}"
+    destination = storage_dir / storage_name
+
+    with destination.open("wb") as buffer:
+        while True:
+            chunk = await upload.read(1024 * 1024)
+            if not chunk:
+                break
+            buffer.write(chunk)
+
+    await upload.close()
+
+    file_in = FileCreate(
+        filename=safe_name,
+        storage_path=str(destination),
+        assignment_id=assignment_id,
+    )
+    file = school_service.create_file(db, file_in)
     return school_service.file_to_schema(file)

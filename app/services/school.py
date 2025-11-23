@@ -104,7 +104,7 @@ def get_assignment(db: Session, assignment_id: int) -> Assignment | None:
 
 
 def create_file(db: Session, file_in: FileCreate) -> File:
-    file = File(**file_in.model_dump())
+    file = File(**file_in.model_dump(by_alias=True))
     db.add(file)
     db.commit()
     db.refresh(file)
@@ -176,7 +176,7 @@ def file_to_schema(file: File) -> FileRead:
     return FileRead(
         id=file.id,
         filename=file.filename,
-        path=file.path,
+        storage_path=file.path,
         assignment_id=file.assignment_id,
         created_at=file.created_at,
         updated_at=file.updated_at,
