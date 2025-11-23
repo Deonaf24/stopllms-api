@@ -90,3 +90,7 @@ class FileCreate(FileBase):
 
 class FileRead(FileBase, TimestampModel):
     id: int
+
+class JoinClassRequest(BaseModel):
+    join_code: str
+    student_id: int

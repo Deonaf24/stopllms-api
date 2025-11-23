@@ -11,6 +11,7 @@ from app.schemas.school import (
     ClassRead,
     FileCreate,
     FileRead,
+    JoinClassRequest,
     StudentCreate,
     StudentRead,
     TeacherCreate,
@@ -100,20 +101,20 @@ def enroll_student(class_id: int, student_id: int, db: Session = Depends(get_db)
 
 @router.post("/classes/join", response_model=ClassRead)
 def join_class_by_code(
-    join_code: str,
-    student_id: int,
+    payload: JoinClassRequest,
     db: Session = Depends(get_db)
 ):
-    class_obj = school_service.get_class_by_join_code(db, join_code)
+    class_obj = school_service.get_class_by_join_code(db, payload.join_code)
     if not class_obj:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invalid join code")
 
-    student = school_service.get_student(db, student_id)
+    student = school_service.get_student(db, payload.student_id)
     if not student:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
 
     updated = school_service.enroll_student(db, class_obj, student)
     return school_service.class_to_schema(updated)
+
 
 
 
