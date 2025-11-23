@@ -46,6 +46,7 @@ class ClassBase(BaseModel):
     name: str
     description: Optional[str] = None
     teacher_id: Optional[int] = None
+    join_code: str
 
 
 class ClassCreate(ClassBase):
@@ -56,6 +57,7 @@ class ClassRead(ClassBase, TimestampModel):
     id: int
     student_ids: List[int] = Field(default_factory=list)
     assignment_ids: List[int] = Field(default_factory=list)
+    join_code: str
 
 
 class AssignmentBase(BaseModel):

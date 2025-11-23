@@ -123,6 +123,7 @@ class Class(TimestampMixin, Base):
     teacher_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("teachers.id", ondelete="SET NULL"), nullable=True
     )
+    join_code: Mapped[str] = mapped_column(String(6), unique=True, nullable=False)
 
     teacher: Mapped[Teacher | None] = relationship("Teacher", back_populates="classes")
     students: Mapped[list[Student]] = relationship(
