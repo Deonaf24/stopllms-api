@@ -177,6 +177,8 @@ def file_to_schema(file: File) -> FileRead:
         id=file.id,
         filename=file.filename,
         storage_path=file.path,
+        mime_type=file.mime_type,
+        size=file.size,
         assignment_id=file.assignment_id,
         created_at=file.created_at,
         updated_at=file.updated_at,

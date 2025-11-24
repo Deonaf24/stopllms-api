@@ -82,6 +82,8 @@ class FileBase(BaseModel):
     filename: str
     storage_path: str = Field(alias="path")
     assignment_id: int
+    mime_type: str | None = None
+    size: int = 0
 
     model_config = ConfigDict(populate_by_name=True)
 

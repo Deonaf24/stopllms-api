@@ -195,18 +195,23 @@ async def upload_file(
     storage_name = f"{uuid4().hex}_{safe_name}"
     destination = storage_dir / storage_name
 
+    total_size = 0
+
     with destination.open("wb") as buffer:
         while True:
             chunk = await upload.read(1024 * 1024)
             if not chunk:
                 break
             buffer.write(chunk)
+            total_size += len(chunk)
 
     await upload.close()
 
     file_in = FileCreate(
         filename=safe_name,
         storage_path=str(destination),
+        mime_type=upload.content_type,
+        size=total_size,
         assignment_id=assignment_id,
     )
     file = school_service.create_file(db, file_in)
