@@ -8,6 +8,7 @@ passlib[bcrypt]
 requests
 SQLAlchemy
 alembic
+boto3
 langchain
 langchain-core
 langchain-ollama

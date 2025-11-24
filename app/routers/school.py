@@ -1,12 +1,8 @@
 from __future__ import annotations
 
-from pathlib import Path
-from uuid import uuid4
-
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.core.db import get_db
 from app.schemas.school import (
     AssignmentCreate,
@@ -22,6 +18,7 @@ from app.schemas.school import (
     TeacherRead,
 )
 from app.services import school as school_service
+from app.services.storage import StorageError, get_storage_service
 
 router = APIRouter(prefix="/school", tags=["school"])
 
@@ -187,31 +184,21 @@ async def upload_file(
             status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found"
         )
 
-    storage_dir = Path(settings.FILE_STORAGE_DIR)
-    storage_dir.mkdir(parents=True, exist_ok=True)
-
-    original_name = upload.filename or "upload"
-    safe_name = Path(original_name).name
-    storage_name = f"{uuid4().hex}_{safe_name}"
-    destination = storage_dir / storage_name
-
-    total_size = 0
-
-    with destination.open("wb") as buffer:
-        while True:
-            chunk = await upload.read(1024 * 1024)
-            if not chunk:
-                break
-            buffer.write(chunk)
-            total_size += len(chunk)
-
-    await upload.close()
+    storage = get_storage_service()
+    try:
+        stored = await storage.save_upload(upload=upload, assignment_id=assignment_id)
+    except StorageError as exc:  # pragma: no cover - passthrough
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unable to persist uploaded file",
+        ) from exc
 
     file_in = FileCreate(
-        filename=safe_name,
-        storage_path=str(destination),
-        mime_type=upload.content_type,
-        size=total_size,
+        filename=upload.filename or "upload",
+        storage_path=stored.path,
+        storage_url=stored.url,
+        mime_type=stored.mime_type,
+        size=stored.size,
         assignment_id=assignment_id,
     )
     file = school_service.create_file(db, file_in)
