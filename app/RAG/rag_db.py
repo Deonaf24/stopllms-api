@@ -6,7 +6,14 @@ from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_ollama import OllamaEmbeddings
 from app.RAG.rag_config import DB_DIR, EMBED_MODEL
+import re
 
+def make_safe(name: str) -> str:
+    # Lowercase, remove leading/trailing spaces
+    name = name.strip().replace(" ", "_")
+    # Replace ANY illegal character with underscore
+    name = re.sub(r"[^a-zA-Z0-9._-]", "_", name)
+    return name
 
 def get_embeddings():
     return OllamaEmbeddings(model=EMBED_MODEL)
@@ -15,9 +22,10 @@ def get_embeddings():
 def get_db(assignment_id: str) -> Chroma:
     persist_dir = Path(DB_DIR) / assignment_id
     persist_dir.mkdir(parents=True, exist_ok=True)
+    safe_name = make_safe(assignment_id)
     return Chroma(
         persist_directory=str(persist_dir),
-        collection_name=f"assignment_{assignment_id}",
+        collection_name=f"assignment_{safe_name}",
         embedding_function=get_embeddings(),
     )
 
