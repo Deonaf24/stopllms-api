@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
@@ -18,6 +18,7 @@ from app.schemas.school import (
     TeacherRead,
 )
 from app.services import school as school_service
+from app.services.storage import StorageError, get_storage_service
 
 router = APIRouter(prefix="/school", tags=["school"])
 
@@ -146,6 +147,11 @@ def get_assignment(assignment_id: int, db: Session = Depends(get_db)):
 
 @router.post("/files", response_model=FileRead, status_code=status.HTTP_201_CREATED)
 def create_file(file_in: FileCreate, db: Session = Depends(get_db)):
+    assignment = school_service.get_assignment(db, file_in.assignment_id)
+    if not assignment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found"
+        )
     file = school_service.create_file(db, file_in)
     return school_service.file_to_schema(file)
 
@@ -161,4 +167,39 @@ def get_file(file_id: int, db: Session = Depends(get_db)):
     file = school_service.get_file(db, file_id)
     if not file:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+    return school_service.file_to_schema(file)
+
+
+@router.post(
+    "/files/upload", response_model=FileRead, status_code=status.HTTP_201_CREATED
+)
+async def upload_file(
+    assignment_id: int = Form(...),
+    upload: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    assignment = school_service.get_assignment(db, assignment_id)
+    if not assignment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found"
+        )
+
+    storage = get_storage_service()
+    try:
+        stored = await storage.save_upload(upload=upload, assignment_id=assignment_id)
+    except StorageError as exc:  # pragma: no cover - passthrough
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unable to persist uploaded file",
+        ) from exc
+
+    file_in = FileCreate(
+        filename=upload.filename or "upload",
+        storage_path=stored.path,
+        storage_url=stored.url,
+        mime_type=stored.mime_type,
+        size=stored.size,
+        assignment_id=assignment_id,
+    )
+    file = school_service.create_file(db, file_in)
     return school_service.file_to_schema(file)

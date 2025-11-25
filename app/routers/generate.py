@@ -7,9 +7,10 @@ from app.RAG.rag_db import get_db
 
 router = APIRouter()
 
+
 @router.post("/generate")
-def generate(req: PromptRequest, current_user = Depends(get_current_active_user)):
-    ctx = retrieve_context(get_db(), req.user_message)
+def generate(req: PromptRequest, current_user=Depends(get_current_active_user)):
+    ctx = retrieve_context(get_db(req.assignment_id), req.user_message)
     prompt = build_prompt(req, ctx)
     raw = ollama_generate(prompt)
     return {"answer": raw}

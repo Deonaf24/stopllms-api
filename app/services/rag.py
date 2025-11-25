@@ -5,12 +5,9 @@ from langchain_core.documents import Document
 from app.RAG.rag_ingest import split_documents, attach_chunk_ids
 from app.RAG.rag_db import update_db, clear_db
 
-from app.RAG.rag_db import update_db
-from app.RAG.rag_ingest import attach_chunk_ids, split_documents
 
-
-async def ingest_file(file: UploadFile):
-    #read the pdf
+async def ingest_file(file: UploadFile, assignment_id: str):
+    # read the pdf
     content = await file.read()
     reader = PdfReader(BytesIO(content))
 
@@ -21,14 +18,14 @@ async def ingest_file(file: UploadFile):
 
     chunks = split_documents(docs)
     chunks_with_ids, _ = attach_chunk_ids(chunks)
-    added = update_db(chunks_with_ids)
+    added = update_db(chunks_with_ids, assignment_id)
     if added == 0:
         print("[UPDATE] No new chunks.")
     else:
         print(f"[UPDATE] Added {added} new chunks.")
-    
+
     return added
 
-async def clear_databased() -> bool :
-    cleared = clear_db()
-    return cleared
+
+def clear_databased(assignment_id: str) -> bool:
+    return clear_db(assignment_id)
