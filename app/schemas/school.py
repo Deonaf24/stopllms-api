@@ -80,8 +80,13 @@ class AssignmentRead(AssignmentBase, TimestampModel):
 
 class FileBase(BaseModel):
     filename: str
-    path: str
+    storage_path: str = Field(alias="path")
+    storage_url: str | None = Field(default=None, alias="url")
     assignment_id: int
+    mime_type: str | None = None
+    size: int = 0
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class FileCreate(FileBase):

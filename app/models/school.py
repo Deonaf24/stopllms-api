@@ -167,6 +167,9 @@ class File(TimestampMixin, Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     path: Mapped[str] = mapped_column(String(512), nullable=False)
+    url: Mapped[str | None] = mapped_column(String(1024))
+    mime_type: Mapped[str | None] = mapped_column(String(255))
+    size: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     assignment_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("assignments.id", ondelete="CASCADE"), nullable=False
     )
