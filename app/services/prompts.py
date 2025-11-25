@@ -1,13 +1,15 @@
 import re
+from typing import List
+from langchain_chroma import Chroma
+
 from app.schemas.prompts import PromptRequest
 from app.RAG.rag_config import TOP_K
-from langchain_chroma import Chroma
-from typing import List
+
 
 def build_prompt(req: PromptRequest, context_blocks: List[str]) -> str:
 
     context_text = "\n\n".join(f"[CONTEXT {i+1}]\n{cb}" for i, cb in enumerate(context_blocks))
-    
+
     return (
         "### Input:\n"
         "[SYSTEM]\n"
@@ -34,8 +36,9 @@ def build_prompt(req: PromptRequest, context_blocks: List[str]) -> str:
         "### Output:\n"
     )
 
+
 def retrieve_context(db: Chroma, query: str, top_k: int = TOP_K, threshold: float = 0.9):
     docs = db.similarity_search_with_score(query, k=top_k)
     filtered_docs = [doc.page_content for doc, score in docs if score >= threshold]
-    print (filtered_docs)
+    print(filtered_docs)
     return filtered_docs

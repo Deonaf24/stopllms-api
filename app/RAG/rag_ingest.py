@@ -1,14 +1,18 @@
 # rag_ingest.py
 from __future__ import annotations
+from pathlib import Path
 from typing import List, Tuple
 from langchain_community.document_loaders import PyPDFDirectoryLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 from app.RAG.rag_config import PDF_DIR, CHUNK_SIZE, CHUNK_OVERLAP
 
-def load_documents() -> List[Document]:
-    loader = PyPDFDirectoryLoader(str(PDF_DIR))
+
+def load_documents(assignment_id: str) -> List[Document]:
+    assignment_dir = Path(PDF_DIR) / assignment_id
+    loader = PyPDFDirectoryLoader(str(assignment_dir))
     return loader.load()
+
 
 def split_documents(documents: List[Document]) -> List[Document]:
     splitter = RecursiveCharacterTextSplitter(
@@ -19,11 +23,11 @@ def split_documents(documents: List[Document]) -> List[Document]:
     )
     return splitter.split_documents(documents)
 
+
 def attach_chunk_ids(chunks: List[Document]) -> Tuple[List[Document], List[str]]:
     """
     Stable ID per chunk: "{source}:{page}:{chunk_index}"
-    Assumes loader sets metadata['source'] and metadata['page'].
-    """
+    Assumes loader sets metadata['source'] and metadata['page']."""
     ids: List[str] = []
     last_page_id = None
     chunk_index = 0
