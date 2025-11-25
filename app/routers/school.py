@@ -18,6 +18,7 @@ from app.schemas.school import (
     TeacherRead,
 )
 from app.services import school as school_service
+from app.services.rag import ingest_file
 from app.services.storage import StorageError, get_storage_service
 
 router = APIRouter(prefix="/school", tags=["school"])
@@ -202,4 +203,6 @@ async def upload_file(
         assignment_id=assignment_id,
     )
     file = school_service.create_file(db, file_in)
+    await ingest_file(upload, str(assignment.id))
+    await upload.close()
     return school_service.file_to_schema(file)
