@@ -49,7 +49,7 @@ class LocalStorage(BaseStorage):
                 buffer.write(chunk)
                 size += len(chunk)
 
-        await upload.close()
+        await upload.seek(0)
 
         url = f"{self.base_url}/{key}" if self.base_url else None
         return StoredFile(path=key, url=url, size=size, mime_type=upload.content_type)
@@ -93,8 +93,6 @@ class S3Storage(BaseStorage):
                 size += len(chunk)
             temp_path = Path(tmp.name)
 
-        await upload.close()
-
         try:
             self.client.upload_file(
                 Filename=str(temp_path),
@@ -106,6 +104,8 @@ class S3Storage(BaseStorage):
             raise StorageError("Failed to upload file to object storage") from exc
         finally:
             temp_path.unlink(missing_ok=True)
+
+        await upload.seek(0)
 
         url = self._build_url(key)
         return StoredFile(path=key, url=url, size=size, mime_type=upload.content_type)
