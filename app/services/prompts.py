@@ -1,9 +1,12 @@
+import logging
 import re
 from typing import List
 from langchain_chroma import Chroma
 
 from app.schemas.prompts import PromptRequest
-from app.RAG.rag_config import TOP_K
+from app.RAG.rag_config import SCORE_THRESHOLD, TOP_K
+
+logger = logging.getLogger(__name__)
 
 
 def build_prompt(req: PromptRequest, context_blocks: List[str]) -> str:
@@ -37,8 +40,20 @@ def build_prompt(req: PromptRequest, context_blocks: List[str]) -> str:
     )
 
 
-def retrieve_context(db: Chroma, query: str, top_k: int = TOP_K, threshold: float = 0.9):
+def retrieve_context(
+    db: Chroma, query: str, top_k: int = TOP_K, threshold: float = SCORE_THRESHOLD
+):
     docs = db.similarity_search_with_score(query, k=top_k)
-    filtered_docs = [doc.page_content for doc, score in docs if score >= threshold]
-    print(filtered_docs)
-    return filtered_docs
+    if docs:
+        top_distance = docs[0][1]
+        logger.info(
+            "Top result distance %.4f (threshold=%s) for query=%r", 
+            top_distance,
+            threshold,
+            query,
+        )
+    # Chroma returns smaller scores for closer matches (distance), so we keep results
+    # at or below the configured distance threshold.
+    if threshold is None:
+        return [doc.page_content for doc, _ in docs]
+    return [doc.page_content for doc, score in docs if score <= threshold]
