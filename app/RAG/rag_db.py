@@ -1,12 +1,16 @@
 # rag_db.py
 from __future__ import annotations
+import os
 from pathlib import Path
+import shutil
 from typing import List, Tuple, Set
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_ollama import OllamaEmbeddings
 from app.RAG.rag_config import DB_DIR, EMBED_MODEL
 import re
+
+RAG_ROOT = "RAG/chroma_langchain_db" 
 
 def make_safe(name: str) -> str:
     # Lowercase, remove leading/trailing spaces
@@ -75,3 +79,16 @@ def clear_db(assignment_id: str) -> bool:
 def stats_db(assignment_id: str) -> int:
     db = get_db(assignment_id)
     return len(get_existing_ids(db))
+
+def clear_all_dbs():
+    """
+    Deletes ALL RAG vector databases (all namespaces).
+    """
+    if not os.path.exists(RAG_ROOT):
+        return
+
+    for name in os.listdir(RAG_ROOT):
+        full_path = os.path.join(RAG_ROOT, name)
+        if os.path.isdir(full_path):
+            shutil.rmtree(full_path)
+    print("All RAG databases cleared.")
