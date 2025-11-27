@@ -18,6 +18,7 @@ from app.schemas.school import (
     TeacherRead,
 )
 from app.services import school as school_service
+from app.services.rag import ingest_file
 from app.services.storage import StorageError, get_storage_service
 
 router = APIRouter(prefix="/school", tags=["school"])
@@ -141,6 +142,30 @@ def get_assignment(assignment_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
     return school_service.assignment_to_schema(assignment)
 
+@router.delete("/assignments/{assignment_id}", response_model=AssignmentRead)
+def delete_assignment(assignment_id: int, db: Session = Depends(get_db)):
+    assignment = school_service.delete_assignment(db, assignment_id)
+    if not assignment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
+    return school_service.assignment_to_schema(assignment)
+
+@router.delete("/assignments", response_model=list[AssignmentRead])
+def delete_assignments(db: Session = Depends(get_db)):
+    assignments = school_service.list_assignments(db)
+
+    deleted_items = []
+
+    for assignment in assignments:
+        # Convert model to schema BEFORE deletion
+        schema_copy = school_service.assignment_to_schema(assignment)
+
+        db.delete(assignment)
+        deleted_items.append(schema_copy)
+
+    db.commit()
+
+    return deleted_items
+
 # ============================================================
 # FILES (metadata only — not file upload)
 # ============================================================
@@ -202,4 +227,6 @@ async def upload_file(
         assignment_id=assignment_id,
     )
     file = school_service.create_file(db, file_in)
+    await ingest_file(upload, str(assignment.id))
+    await upload.close()
     return school_service.file_to_schema(file)

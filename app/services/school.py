@@ -102,6 +102,16 @@ def list_assignments(db: Session) -> list[Assignment]:
 def get_assignment(db: Session, assignment_id: int) -> Assignment | None:
     return db.get(Assignment, assignment_id)
 
+def delete_assignment(db: Session, assignment_id: int) -> Assignment | None:
+    ass = db.get(Assignment, assignment_id)
+    if not ass:
+        return None
+
+    db.delete(ass)
+    db.commit()   # VERY IMPORTANT
+    return ass    # return the deleted object
+
+
 
 def create_file(db: Session, file_in: FileCreate) -> File:
     file = File(**file_in.model_dump(by_alias=True))

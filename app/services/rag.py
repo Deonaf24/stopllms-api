@@ -1,3 +1,5 @@
+import os
+import shutil
 from fastapi import UploadFile
 from io import BytesIO
 from pypdf import PdfReader
@@ -5,6 +7,8 @@ from langchain_core.documents import Document
 from app.RAG.rag_ingest import split_documents, attach_chunk_ids
 from app.RAG.rag_db import update_db, clear_db
 
+
+RAG_ROOT = "app/RAG/chroma_langchain_db" 
 
 async def ingest_file(file: UploadFile, assignment_id: str):
     # read the pdf
@@ -27,5 +31,5 @@ async def ingest_file(file: UploadFile, assignment_id: str):
     return added
 
 
-def clear_databased(assignment_id: str) -> bool:
+def clear_database(assignment_id: str) -> bool:
     return clear_db(assignment_id)
