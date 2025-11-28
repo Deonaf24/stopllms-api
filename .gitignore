@@ -3,3 +3,4 @@ __pycache__/
 venv/
 app/RAG/chroma_langchain_db/
 app.db
+uploads/
