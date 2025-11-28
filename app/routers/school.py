@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
@@ -230,3 +231,30 @@ async def upload_file(
     await ingest_file(upload, str(assignment.id))
     await upload.close()
     return school_service.file_to_schema(file)
+
+@router.get("/files/{file_id}/download")
+async def download_file(file_id: int, db: Session = Depends(get_db)):
+    file = school_service.get_file(db, file_id)
+    if not file:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    storage = get_storage_service()
+
+    # CASE 1 — PREFERRING PUBLIC URL if available (S3 or static URL)
+    if file.url:
+        return RedirectResponse(url=file.url)
+
+    # CASE 2 — LOCAL FS or PRIVATE STORAGE (load bytes manually)
+    try:
+        data = await storage.open_file(file.path)
+    except StorageError:
+        raise HTTPException(status_code=404, detail="Stored file could not be accessed")
+
+    return StreamingResponse(
+        iter([data]),
+        media_type=file.mime_type or "application/octet-stream",
+        headers={
+            "Content-Disposition": f'inline; filename="{file.filename}"',
+            "Content-Length": str(len(data)),
+        },
+    )

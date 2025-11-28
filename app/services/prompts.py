@@ -37,7 +37,7 @@ def build_prompt(req: PromptRequest, context_blocks: List[str]) -> str:
     )
 
 
-def retrieve_context(db: Chroma, query: str, top_k: int = TOP_K, threshold: float = 0.9):
+def retrieve_context(db: Chroma, query: str, top_k: int = TOP_K, threshold: float = 0.2):
     docs = db.similarity_search_with_score(query, k=top_k)
     filtered_docs = [doc.page_content for doc, score in docs if score >= threshold]
     print(filtered_docs)

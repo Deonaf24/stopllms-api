@@ -8,6 +8,7 @@ from uuid import uuid4
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import UploadFile
+from starlette.concurrency import run_in_threadpool
 
 from app.core.config import settings
 
@@ -26,6 +27,9 @@ class StoredFile:
 
 class BaseStorage:
     async def save_upload(self, upload: UploadFile, assignment_id: int) -> StoredFile:  # pragma: no cover - interface
+        raise NotImplementedError
+    
+    async def open_file(self, path: str) -> bytes:
         raise NotImplementedError
 
 
@@ -53,6 +57,17 @@ class LocalStorage(BaseStorage):
 
         url = f"{self.base_url}/{key}" if self.base_url else None
         return StoredFile(path=key, url=url, size=size, mime_type=upload.content_type)
+    
+    def get_local_path(self, path: str) -> Path:
+        """Return the absolute OS path from the storage key."""
+        return self.base_dir / path
+    
+    async def open_file(self, path: str) -> bytes:
+        absolute = self.get_local_path(path)
+        if not absolute.exists():
+            raise StorageError("File not found on local storage")
+
+        return await run_in_threadpool(absolute.read_bytes)
 
 
 class S3Storage(BaseStorage):
@@ -118,6 +133,17 @@ class S3Storage(BaseStorage):
         if self.region_name:
             return f"https://{self.bucket}.s3.{self.region_name}.amazonaws.com/{key}"
         return None
+    
+    async def open_file(self, path: str) -> bytes:
+        try:
+            def _get():
+                obj = self.client.get_object(Bucket=self.bucket, Key=path)
+                return obj["Body"].read()
+
+            return await run_in_threadpool(_get)
+
+        except Exception as exc:
+            raise StorageError("File not found in S3") from exc
 
 
 _storage: BaseStorage | None = None
