@@ -1,9 +1,20 @@
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from app.core.config import settings
 from app.routers import auth, generate, rag, school
 from fastapi.middleware.cors import CORSMiddleware
 
 def create_app() -> FastAPI:
     app = FastAPI()
+    if settings.FILE_STORAGE_BACKEND.lower() == "local" and settings.FILE_STORAGE_BASE_URL:
+        mount_path = settings.FILE_STORAGE_BASE_URL.rstrip("/") or "/"
+        if not mount_path.startswith("/"):
+            mount_path = f"/{mount_path}"
+        app.mount(
+            mount_path,
+            StaticFiles(directory=settings.FILE_STORAGE_DIR),
+            name="file-storage",
+        )
     app.include_router(auth.router, prefix="/auth", tags=["auth"])
     app.include_router(generate.router, tags=["llm"])
     app.include_router(rag.router, tags=["rag"])
