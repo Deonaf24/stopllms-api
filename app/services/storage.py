@@ -36,7 +36,13 @@ class BaseStorage:
 class LocalStorage(BaseStorage):
     def __init__(self, base_dir: Path, base_url: Optional[str] = None):
         self.base_dir = base_dir
-        self.base_url = base_url.rstrip("/") if base_url else None
+        if base_url:
+            cleaned = base_url.rstrip("/")
+            if not cleaned.startswith(("http://", "https://", "/")):
+                cleaned = f"/{cleaned}"
+            self.base_url = cleaned
+        else:
+            self.base_url = None
 
     async def save_upload(self, upload: UploadFile, assignment_id: int) -> StoredFile:
         safe_name = Path(upload.filename or "upload").name

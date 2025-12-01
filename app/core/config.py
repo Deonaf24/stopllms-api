@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite:///./app.db"
     FILE_STORAGE_BACKEND: str = "local"
     FILE_STORAGE_DIR: str = "uploads"
-    FILE_STORAGE_BASE_URL: str | None = None
+    FILE_STORAGE_BASE_URL: str | None = "/uploads"
     FILE_STORAGE_BUCKET: str | None = None
     FILE_STORAGE_S3_ENDPOINT: str | None = None
     FILE_STORAGE_S3_REGION: str | None = None
