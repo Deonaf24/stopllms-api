@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.schemas.school import AssignmentCreate, AssignmentRead, FileCreate, FileRead
-from app.services import school as school_service
+from app.services import assignments as assignments_service
 from app.services.rag import ingest_file
 from app.services.storage import StorageError, get_storage_service
 
@@ -17,41 +17,41 @@ router = APIRouter(prefix="/school", tags=["school"])
     "/assignments", response_model=AssignmentRead, status_code=status.HTTP_201_CREATED
 )
 def create_assignment(assignment_in: AssignmentCreate, db: Session = Depends(get_db)):
-    assignment = school_service.create_assignment(db, assignment_in)
-    return school_service.assignment_to_schema(assignment)
+    assignment = assignments_service.create_assignment(db, assignment_in)
+    return assignments_service.assignment_to_schema(assignment)
 
 
 @router.get("/assignments", response_model=list[AssignmentRead])
 def list_assignments(db: Session = Depends(get_db)):
-    assignments = school_service.list_assignments(db)
-    return [school_service.assignment_to_schema(assignment) for assignment in assignments]
+    assignments = assignments_service.list_assignments(db)
+    return [assignments_service.assignment_to_schema(assignment) for assignment in assignments]
 
 
 @router.get("/assignments/{assignment_id}", response_model=AssignmentRead)
 def get_assignment(assignment_id: int, db: Session = Depends(get_db)):
-    assignment = school_service.get_assignment(db, assignment_id)
+    assignment = assignments_service.get_assignment(db, assignment_id)
     if not assignment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
-    return school_service.assignment_to_schema(assignment)
+    return assignments_service.assignment_to_schema(assignment)
 
 
 @router.delete("/assignments/{assignment_id}", response_model=AssignmentRead)
 def delete_assignment(assignment_id: int, db: Session = Depends(get_db)):
-    assignment = school_service.delete_assignment(db, assignment_id)
+    assignment = assignments_service.delete_assignment(db, assignment_id)
     if not assignment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
-    return school_service.assignment_to_schema(assignment)
+    return assignments_service.assignment_to_schema(assignment)
 
 
 @router.delete("/assignments", response_model=list[AssignmentRead])
 def delete_assignments(db: Session = Depends(get_db)):
-    assignments = school_service.list_assignments(db)
+    assignments = assignments_service.list_assignments(db)
 
     deleted_items = []
 
     for assignment in assignments:
         # Convert model to schema BEFORE deletion
-        schema_copy = school_service.assignment_to_schema(assignment)
+        schema_copy = assignments_service.assignment_to_schema(assignment)
 
         db.delete(assignment)
         deleted_items.append(schema_copy)
@@ -67,27 +67,27 @@ def delete_assignments(db: Session = Depends(get_db)):
 
 @router.post("/files", response_model=FileRead, status_code=status.HTTP_201_CREATED)
 def create_file(file_in: FileCreate, db: Session = Depends(get_db)):
-    assignment = school_service.get_assignment(db, file_in.assignment_id)
+    assignment = assignments_service.get_assignment(db, file_in.assignment_id)
     if not assignment:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found"
         )
-    file = school_service.create_file(db, file_in)
-    return school_service.file_to_schema(file)
+    file = assignments_service.create_file(db, file_in)
+    return assignments_service.file_to_schema(file)
 
 
 @router.get("/files", response_model=list[FileRead])
 def list_files(db: Session = Depends(get_db)):
-    files = school_service.list_files(db)
-    return [school_service.file_to_schema(file) for file in files]
+    files = assignments_service.list_files(db)
+    return [assignments_service.file_to_schema(file) for file in files]
 
 
 @router.get("/files/{file_id}", response_model=FileRead)
 def get_file(file_id: int, db: Session = Depends(get_db)):
-    file = school_service.get_file(db, file_id)
+    file = assignments_service.get_file(db, file_id)
     if not file:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
-    return school_service.file_to_schema(file)
+    return assignments_service.file_to_schema(file)
 
 
 @router.post(
@@ -98,7 +98,7 @@ async def upload_file(
     upload: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
-    assignment = school_service.get_assignment(db, assignment_id)
+    assignment = assignments_service.get_assignment(db, assignment_id)
     if not assignment:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found"
@@ -121,15 +121,15 @@ async def upload_file(
         size=stored.size,
         assignment_id=assignment_id,
     )
-    file = school_service.create_file(db, file_in)
+    file = assignments_service.create_file(db, file_in)
     await ingest_file(upload, str(assignment.id))
     await upload.close()
-    return school_service.file_to_schema(file)
+    return assignments_service.file_to_schema(file)
 
 
 @router.get("/files/{file_id}/download")
 async def download_file(file_id: int, db: Session = Depends(get_db)):
-    file = school_service.get_file(db, file_id)
+    file = assignments_service.get_file(db, file_id)
     if not file:
         raise HTTPException(status_code=404, detail="File not found")
 

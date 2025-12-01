@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.core.deps import get_current_active_user
-from app.services import school as school_service
+from app.services import assignments as assignments_service
 from app.services.rag import ingest_file, clear_database
 
 router = APIRouter()
@@ -16,7 +16,7 @@ async def create_upload_file(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_active_user),
 ):
-    assignment = school_service.get_assignment(db, assignment_id)
+    assignment = assignments_service.get_assignment(db, assignment_id)
     if not assignment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
 
