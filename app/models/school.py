@@ -178,3 +178,22 @@ class File(TimestampMixin, Base):
 
     def __repr__(self) -> str:
         return f"<File id={self.id} filename={self.filename!r}>"
+
+
+class ChatLog(TimestampMixin, Base):
+    __tablename__ = "chat_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    student_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    assignment_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("assignments.id", ondelete="CASCADE"), nullable=False
+    )
+    question: Mapped[str] = mapped_column(Text, nullable=False)
+
+    student: Mapped[User] = relationship("User")
+    assignment: Mapped[Assignment] = relationship("Assignment")
+
+    def __repr__(self) -> str:
+        return f"<ChatLog id={self.id} student={self.student_id}>"

@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     )
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
-    DATABASE_URL: str = "sqlite:///./app.db"
+    DATABASE_URL: str = "postgresql+psycopg2://deon@localhost:5432/stopllms"
     FILE_STORAGE_BACKEND: str = "local"
     FILE_STORAGE_DIR: str = "uploads"
     FILE_STORAGE_BASE_URL: str | None = "/uploads"
