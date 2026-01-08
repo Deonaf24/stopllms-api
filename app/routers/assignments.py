@@ -5,12 +5,13 @@ from fastapi.responses import RedirectResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.schemas.analytics import AssignmentStructureReviewRead
+from app.schemas.analytics import AssignmentStructureReview, AssignmentStructureReviewRead
 from app.schemas.school import AssignmentCreate, AssignmentRead, FileCreate, FileRead
 from app.services import assignments as assignments_service
 from app.services.assignment_analysis import (
     AssignmentAnalysisError,
     analyze_assignment_structure,
+    apply_assignment_structure,
 )
 from app.services.rag import ingest_file
 from app.services.storage import StorageError, get_storage_service
@@ -78,6 +79,23 @@ async def analyze_assignment(assignment_id: int, db: Session = Depends(get_db)):
         return await analyze_assignment_structure(db, assignment)
     except AssignmentAnalysisError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.put(
+    "/assignments/{assignment_id}/structure",
+    response_model=AssignmentStructureReviewRead,
+)
+def update_assignment_structure(
+    assignment_id: int,
+    payload: AssignmentStructureReview,
+    db: Session = Depends(get_db),
+):
+    assignment = assignments_service.get_assignment(db, assignment_id)
+    if not assignment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
+    if payload.assignment_id != assignment_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Assignment ID mismatch")
+    return apply_assignment_structure(db, assignment, payload)
 
 
 # ============================================================

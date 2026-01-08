@@ -12,6 +12,7 @@ from app.models.school import Assignment, AssignmentQuestion, Concept
 from app.schemas.analytics import (
     AssignmentConceptLink,
     AssignmentQuestionPayload,
+    AssignmentStructureReview,
     AssignmentStructureReviewRead,
     ConceptPayload,
     QuestionConceptLink,
@@ -198,6 +199,118 @@ async def analyze_assignment_structure(
         ]
 
     assignment.structure_approved = False
+    db.commit()
+    db.refresh(assignment)
+
+    return AssignmentStructureReviewRead(
+        assignment_id=assignment.id,
+        concepts=concept_responses,
+        questions=question_responses,
+        question_concepts=question_concept_links,
+        assignment_concepts=assignment_concept_links,
+        structure_approved=assignment.structure_approved,
+    )
+
+
+def apply_assignment_structure(
+    db: Session, assignment: Assignment, payload: AssignmentStructureReview
+) -> AssignmentStructureReviewRead:
+    concept_responses: list[ConceptPayload] = []
+    question_responses: list[AssignmentQuestionPayload] = []
+
+    assignment.questions.clear()
+    assignment.concepts.clear()
+    db.flush()
+
+    concept_map: dict[int, Concept] = {}
+    concept_key_map: dict[str, Concept] = {}
+    for concept_payload in payload.concepts:
+        concept_obj = None
+        if concept_payload.id is not None:
+            concept_obj = db.get(Concept, concept_payload.id)
+        if concept_obj is None and concept_payload.name:
+            concept_obj = db.query(Concept).filter(Concept.name == concept_payload.name).one_or_none()
+        if concept_obj is None:
+            concept_obj = Concept(name=concept_payload.name, description=concept_payload.description)
+            db.add(concept_obj)
+        else:
+            concept_obj.name = concept_payload.name
+            concept_obj.description = concept_payload.description
+        db.flush()
+        concept_map[concept_obj.id] = concept_obj
+        concept_key_map[str(concept_payload.id or concept_payload.name)] = concept_obj
+        concept_responses.append(
+            ConceptPayload(id=concept_obj.id, name=concept_obj.name, description=concept_obj.description)
+        )
+
+    question_map: dict[int, AssignmentQuestion] = {}
+    question_key_map: dict[str, AssignmentQuestion] = {}
+    for question_payload in payload.questions:
+        question_obj = None
+        if question_payload.id is not None:
+            question_obj = db.get(AssignmentQuestion, question_payload.id)
+            if question_obj and question_obj.assignment_id != assignment.id:
+                question_obj = None
+        if question_obj is None:
+            question_obj = AssignmentQuestion(assignment_id=assignment.id, prompt=question_payload.prompt)
+            db.add(question_obj)
+        question_obj.prompt = question_payload.prompt
+        question_obj.position = question_payload.position
+        db.flush()
+        question_map[question_obj.id] = question_obj
+        question_key_map[str(question_payload.id or question_payload.prompt)] = question_obj
+        question_responses.append(
+            AssignmentQuestionPayload(
+                id=question_obj.id,
+                prompt=question_obj.prompt,
+                position=question_obj.position,
+                concept_ids=list(question_payload.concept_ids),
+            )
+        )
+
+    question_concept_links: list[QuestionConceptLink] = []
+    if payload.question_concepts:
+        for link in payload.question_concepts:
+            question_obj = question_key_map.get(str(link.question_id))
+            concept_obj = concept_key_map.get(str(link.concept_id))
+            if not question_obj or not concept_obj:
+                continue
+            question_obj.concepts.append(concept_obj)
+            question_concept_links.append(
+                QuestionConceptLink(question_id=question_obj.id, concept_id=concept_obj.id)
+            )
+    else:
+        for question_payload in payload.questions:
+            question_obj = question_key_map.get(str(question_payload.id or question_payload.prompt))
+            if not question_obj:
+                continue
+            for concept_id in question_payload.concept_ids:
+                concept_obj = concept_map.get(concept_id)
+                if not concept_obj:
+                    continue
+                question_obj.concepts.append(concept_obj)
+                question_concept_links.append(
+                    QuestionConceptLink(question_id=question_obj.id, concept_id=concept_obj.id)
+                )
+
+    if payload.assignment_concepts:
+        assignment.concepts = [
+            concept_map[link.concept_id]
+            for link in payload.assignment_concepts
+            if link.concept_id in concept_map
+        ]
+    else:
+        assignment.concepts = list(concept_map.values())
+    assignment_concept_links = [
+        AssignmentConceptLink(concept_id=concept.id) for concept in assignment.concepts
+    ]
+
+    for response in question_responses:
+        response.concept_ids = [
+            link.concept_id for link in question_concept_links if link.question_id == response.id
+        ]
+
+    assignment.structure_approved = True
     db.commit()
     db.refresh(assignment)
 
