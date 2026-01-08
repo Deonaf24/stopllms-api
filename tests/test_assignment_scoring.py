@@ -7,7 +7,7 @@ from sqlalchemy.orm import sessionmaker
 from app.models.base import Base
 from app.models.school import Assignment, AssignmentQuestion, ChatLog, Class, Concept, User
 from app.schemas.analytics import UnderstandingScoreRead
-from app.services import assignment_analysis
+from app.services import analysis as assignment_analysis
 
 
 def test_score_assignment_understanding_persists_scores():

@@ -6,7 +6,7 @@ from sqlalchemy.orm import sessionmaker
 from app.models.base import Base
 from app.models.school import Assignment, Class
 from app.schemas.analytics import AssignmentStructureReview
-from app.services.assignment_analysis import apply_assignment_structure
+from app.services.analysis import apply_assignment_structure
 
 
 def test_apply_assignment_structure_marks_approved_and_replaces_structure():

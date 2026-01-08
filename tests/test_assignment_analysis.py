@@ -5,7 +5,7 @@ from pathlib import Path
 
 def _load_assignment_analysis_module():
     sys.path.append(str(Path(__file__).resolve().parents[1]))
-    module_path = Path(__file__).resolve().parents[1] / "app" / "services" / "assignment_analysis.py"
+    module_path = Path(__file__).resolve().parents[1] / "app" / "services" / "analysis.py"
     spec = importlib.util.spec_from_file_location("assignment_analysis", module_path)
     module = importlib.util.module_from_spec(spec)
     assert spec and spec.loader

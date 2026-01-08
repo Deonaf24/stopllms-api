@@ -12,7 +12,7 @@ from app.schemas.analytics import (
 )
 from app.schemas.school import AssignmentCreate, AssignmentRead, FileCreate, FileRead
 from app.services import assignments as assignments_service
-from app.services.assignment_analysis import (
+from app.services.analysis import (
     AssignmentAnalysisError,
     analyze_assignment_structure,
     apply_assignment_structure,
