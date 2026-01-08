@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from sqlalchemy.orm import Session
 
-from app.models.school import Assignment, File
-from app.schemas.school import AssignmentCreate, AssignmentRead, FileCreate, FileRead
+from app.models.school import Assignment, AssignmentQuestion, Concept, File
+
+if TYPE_CHECKING:
+    from app.schemas.school import AssignmentCreate, AssignmentRead, FileCreate, FileRead
 
 __all__ = [
     "create_assignment",
@@ -13,6 +17,8 @@ __all__ = [
     "create_file",
     "list_files",
     "get_file",
+    "list_assignment_questions",
+    "list_assignment_concepts",
     "assignment_to_schema",
     "file_to_schema",
 ]
@@ -61,7 +67,25 @@ def get_file(db: Session, file_id: int) -> File | None:
     return db.get(File, file_id)
 
 
+def list_assignment_questions(db: Session, assignment_id: int) -> list[AssignmentQuestion]:
+    return (
+        db.query(AssignmentQuestion)
+        .filter(AssignmentQuestion.assignment_id == assignment_id)
+        .order_by(AssignmentQuestion.position.asc().nulls_last(), AssignmentQuestion.id.asc())
+        .all()
+    )
+
+
+def list_assignment_concepts(db: Session, assignment_id: int) -> list[Concept]:
+    assignment = db.get(Assignment, assignment_id)
+    if not assignment:
+        return []
+    return list(assignment.concepts)
+
+
 def assignment_to_schema(assignment: Assignment) -> AssignmentRead:
+    from app.schemas.school import AssignmentRead
+
     return AssignmentRead(
         id=assignment.id,
         title=assignment.title,
@@ -76,6 +100,8 @@ def assignment_to_schema(assignment: Assignment) -> AssignmentRead:
 
 
 def file_to_schema(file: File) -> FileRead:
+    from app.schemas.school import FileRead
+
     return FileRead(
         id=file.id,
         filename=file.filename,
