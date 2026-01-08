@@ -91,3 +91,75 @@ class AssignmentStructureReview(BaseModel):
 
 class AssignmentStructureReviewRead(AssignmentStructureReview):
     structure_approved: bool = False
+
+
+class AssignmentScoreSummary(BaseModel):
+    assignment_id: int
+    average_score: float
+
+    @classmethod
+    def from_row(cls, row) -> "AssignmentScoreSummary | None":
+        if not row:
+            return None
+        return cls(assignment_id=row.assignment_id, average_score=float(row.avg_score))
+
+
+class ConceptScoreSummary(BaseModel):
+    concept_id: int
+    concept_name: str
+    average_score: float
+
+    @classmethod
+    def from_row(cls, row) -> "ConceptScoreSummary | None":
+        if not row:
+            return None
+        return cls(
+            concept_id=row.concept_id,
+            concept_name=row.concept_name,
+            average_score=float(row.avg_score),
+        )
+
+
+class QuestionScoreSummary(BaseModel):
+    question_id: int
+    question_prompt: str
+    average_score: float
+
+    @classmethod
+    def from_row(cls, row) -> "QuestionScoreSummary | None":
+        if not row:
+            return None
+        return cls(
+            question_id=row.question_id,
+            question_prompt=row.question_prompt,
+            average_score=float(row.avg_score),
+        )
+
+
+class StudentScoreSummary(BaseModel):
+    student_id: int
+    average_score: float
+
+
+class StudentAnalyticsRead(BaseModel):
+    student_id: int
+    questions_asked: int
+    easiest_assignment: AssignmentScoreSummary | None
+    hardest_assignment: AssignmentScoreSummary | None
+    most_understood_concept: ConceptScoreSummary | None
+    least_understood_concept: ConceptScoreSummary | None
+
+
+class AssignmentAnalyticsRead(BaseModel):
+    assignment_id: int
+    most_understood_concept: ConceptScoreSummary | None
+    least_understood_concept: ConceptScoreSummary | None
+    most_understood_question: QuestionScoreSummary | None
+    least_understood_question: QuestionScoreSummary | None
+
+
+class ClassAnalyticsRead(BaseModel):
+    class_id: int
+    most_understood_assignment: AssignmentScoreSummary | None
+    least_understood_assignment: AssignmentScoreSummary | None
+    student_rankings: list[StudentScoreSummary]
