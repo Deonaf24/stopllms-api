@@ -5,8 +5,13 @@ from fastapi.responses import RedirectResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
+from app.schemas.analytics import AssignmentStructureReviewRead
 from app.schemas.school import AssignmentCreate, AssignmentRead, FileCreate, FileRead
 from app.services import assignments as assignments_service
+from app.services.assignment_analysis import (
+    AssignmentAnalysisError,
+    analyze_assignment_structure,
+)
 from app.services.rag import ingest_file
 from app.services.storage import StorageError, get_storage_service
 
@@ -59,6 +64,20 @@ def delete_assignments(db: Session = Depends(get_db)):
     db.commit()
 
     return deleted_items
+
+
+@router.post(
+    "/assignments/{assignment_id}/analyze",
+    response_model=AssignmentStructureReviewRead,
+)
+async def analyze_assignment(assignment_id: int, db: Session = Depends(get_db)):
+    assignment = assignments_service.get_assignment(db, assignment_id)
+    if not assignment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
+    try:
+        return await analyze_assignment_structure(db, assignment)
+    except AssignmentAnalysisError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 # ============================================================
