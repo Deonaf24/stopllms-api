@@ -15,6 +15,7 @@ def _load_assignment_analysis_module():
 
 assignment_analysis = _load_assignment_analysis_module()
 _parse_llm_json = assignment_analysis._parse_llm_json
+_validate_extraction_payload = assignment_analysis._validate_extraction_payload
 
 
 def test_build_assignment_extraction_prompt_includes_schema():
@@ -40,3 +41,13 @@ def test_parse_llm_json_strips_wrapped_text():
     payload = _parse_llm_json(raw)
     assert payload["concepts"] == []
     assert payload["questions"] == []
+
+
+def test_validate_extraction_payload_returns_defaults():
+    payload = _validate_extraction_payload("not a dict")
+    assert payload == {
+        "concepts": [],
+        "questions": [],
+        "question_concepts": [],
+        "assignment_concepts": [],
+    }

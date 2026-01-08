@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from io import BytesIO
 from typing import Any, Iterable
@@ -24,6 +25,8 @@ from app.services.prompts import build_assignment_extraction_prompt, build_assig
 class AssignmentAnalysisError(Exception):
     """Raised when assignment analysis fails."""
 
+logger = logging.getLogger(__name__)
+
 
 def _extract_text_from_pdf(data: bytes) -> str:
     reader = PdfReader(BytesIO(data))
@@ -43,8 +46,13 @@ def _parse_llm_json(raw: str) -> dict[str, Any]:
     except json.JSONDecodeError:
         match = re.search(r"\{.*\}", raw, re.DOTALL)
         if not match:
-            raise AssignmentAnalysisError("Failed to parse JSON from model output")
-        return json.loads(match.group(0))
+            logger.warning("Failed to parse JSON from model output")
+            return {}
+        try:
+            return json.loads(match.group(0))
+        except json.JSONDecodeError:
+            logger.warning("Failed to parse JSON from extracted payload")
+            return {}
 
 
 def _normalize_list(value: Any) -> list[dict[str, Any]]:
@@ -61,8 +69,26 @@ def _normalize_score_entries(value: Any) -> list[dict[str, Any]]:
     for entry in entries:
         if "student_id" not in entry or "score" not in entry:
             continue
+        try:
+            score_value = float(entry["score"])
+        except (TypeError, ValueError):
+            continue
+        if not 0 <= score_value <= 1:
+            continue
+        entry["score"] = score_value
         normalized.append(entry)
     return normalized
+
+
+def _validate_extraction_payload(payload: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    if not isinstance(payload, dict):
+        return {"concepts": [], "questions": [], "question_concepts": [], "assignment_concepts": []}
+    return {
+        "concepts": _normalize_list(payload.get("concepts")),
+        "questions": _normalize_list(payload.get("questions")),
+        "question_concepts": _normalize_list(payload.get("question_concepts")),
+        "assignment_concepts": _normalize_list(payload.get("assignment_concepts")),
+    }
 
 
 def _link_assignment_concepts(
@@ -105,12 +131,41 @@ async def analyze_assignment_structure(
 
     prompt = build_assignment_extraction_prompt(combined_text)
     raw = ollama_generate(prompt)
+    logger.info("Assignment extraction raw output: %s", raw)
     payload = _parse_llm_json(raw)
+    normalized = _validate_extraction_payload(payload)
+    concept_payloads = normalized["concepts"]
+    question_payloads = normalized["questions"]
+    question_concepts = normalized["question_concepts"]
+    assignment_concepts = normalized["assignment_concepts"]
 
-    concept_payloads = _normalize_list(payload.get("concepts"))
-    question_payloads = _normalize_list(payload.get("questions"))
-    question_concepts = _normalize_list(payload.get("question_concepts"))
-    assignment_concepts = _normalize_list(payload.get("assignment_concepts"))
+    if not concept_payloads and not question_payloads:
+        logger.warning("Extraction produced no structured data for assignment %s", assignment.id)
+        return AssignmentStructureReviewRead(
+            assignment_id=assignment.id,
+            concepts=[
+                ConceptPayload(id=concept.id, name=concept.name, description=concept.description)
+                for concept in assignment.concepts
+            ],
+            questions=[
+                AssignmentQuestionPayload(
+                    id=question.id,
+                    prompt=question.prompt,
+                    position=question.position,
+                    concept_ids=[concept.id for concept in question.concepts],
+                )
+                for question in assignment.questions
+            ],
+            question_concepts=[
+                QuestionConceptLink(question_id=question.id, concept_id=concept.id)
+                for question in assignment.questions
+                for concept in question.concepts
+            ],
+            assignment_concepts=[
+                AssignmentConceptLink(concept_id=concept.id) for concept in assignment.concepts
+            ],
+            structure_approved=assignment.structure_approved,
+        )
 
     assignment.questions.clear()
     assignment.concepts.clear()
@@ -346,8 +401,13 @@ async def score_assignment_understanding(
     }
     prompt = build_assignment_scoring_prompt(prompt_payload)
     raw = ollama_generate(prompt)
+    logger.info("Assignment scoring raw output: %s", raw)
     payload = _parse_llm_json(raw)
     score_entries = _normalize_score_entries(payload.get("scores"))
+
+    if not score_entries:
+        logger.warning("No valid scores produced for assignment %s", assignment.id)
+        return []
 
     db.query(UnderstandingScore).filter(
         UnderstandingScore.assignment_id == assignment.id

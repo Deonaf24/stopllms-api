@@ -5,7 +5,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.models.base import Base
-from app.models.school import Assignment, AssignmentQuestion, ChatLog, Class, Concept, User
+from app.models.school import Assignment, AssignmentQuestion, ChatLog, Class, Concept, UnderstandingScore, User
 from app.schemas.analytics import UnderstandingScoreRead
 from app.services import analysis as assignment_analysis
 
@@ -85,3 +85,56 @@ def test_score_assignment_understanding_persists_scores():
         updated_at=score.updated_at,
     )
     assert score_schema.score == 0.8
+
+
+def test_score_assignment_understanding_soft_fallback_keeps_existing_scores():
+    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+    SessionLocal = sessionmaker(bind=engine)
+    Base.metadata.create_all(engine)
+
+    db = SessionLocal()
+    class_obj = Class(name="Math", description=None, teacher_id=None, join_code="ABC123")
+    db.add(class_obj)
+    db.commit()
+    db.refresh(class_obj)
+
+    assignment = Assignment(
+        title="Homework 3",
+        description=None,
+        due_at=datetime.now(timezone.utc),
+        class_id=class_obj.id,
+        teacher_id=None,
+    )
+    db.add(assignment)
+    db.commit()
+    db.refresh(assignment)
+
+    student = User(username="student2", email="student2@example.com", hashed_password="hash", disabled=False)
+    db.add(student)
+    db.commit()
+    db.refresh(student)
+
+    existing = UnderstandingScore(
+        student_id=student.id,
+        assignment_id=assignment.id,
+        score=0.6,
+    )
+    db.add(existing)
+    db.add(
+        ChatLog(
+            student_id=student.id,
+            assignment_id=assignment.id,
+            question="Need help?",
+        )
+    )
+    db.commit()
+
+    def _bad_ollama_generate(prompt: str, model: str | None = None) -> str:
+        return "not json"
+
+    assignment_analysis.ollama_generate = _bad_ollama_generate
+
+    scores = asyncio.run(assignment_analysis.score_assignment_understanding(db, assignment))
+    assert scores == []
+    remaining = db.query(UnderstandingScore).filter(UnderstandingScore.assignment_id == assignment.id).all()
+    assert len(remaining) == 1
