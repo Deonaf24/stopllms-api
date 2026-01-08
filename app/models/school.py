@@ -2,7 +2,18 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Table, Text, func, Boolean
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Table,
+    Text,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
@@ -12,6 +23,20 @@ class_students = Table(
     Base.metadata,
     Column("class_id", ForeignKey("classes.id", ondelete="CASCADE"), primary_key=True),
     Column("student_id", ForeignKey("students.id", ondelete="CASCADE"), primary_key=True),
+)
+
+assignment_concepts = Table(
+    "assignment_concepts",
+    Base.metadata,
+    Column("assignment_id", ForeignKey("assignments.id", ondelete="CASCADE"), primary_key=True),
+    Column("concept_id", ForeignKey("concepts.id", ondelete="CASCADE"), primary_key=True),
+)
+
+question_concepts = Table(
+    "question_concepts",
+    Base.metadata,
+    Column("question_id", ForeignKey("assignment_questions.id", ondelete="CASCADE"), primary_key=True),
+    Column("concept_id", ForeignKey("concepts.id", ondelete="CASCADE"), primary_key=True),
 )
 
 
@@ -144,6 +169,7 @@ class Assignment(TimestampMixin, Base):
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
     due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    structure_approved: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     class_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("classes.id", ondelete="CASCADE"), nullable=False
     )
@@ -155,6 +181,12 @@ class Assignment(TimestampMixin, Base):
     teacher: Mapped[Teacher | None] = relationship("Teacher", back_populates="assignments")
     files: Mapped[list[File]] = relationship(
         "File", back_populates="assignment", cascade="all, delete-orphan"
+    )
+    concepts: Mapped[list[Concept]] = relationship(
+        "Concept", secondary=assignment_concepts, back_populates="assignments"
+    )
+    questions: Mapped[list[AssignmentQuestion]] = relationship(
+        "AssignmentQuestion", back_populates="assignment", cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:
@@ -190,6 +222,9 @@ class ChatLog(TimestampMixin, Base):
     assignment_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("assignments.id", ondelete="CASCADE"), nullable=False
     )
+    question_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("assignment_questions.id", ondelete="SET NULL"), nullable=True
+    )
     question: Mapped[str] = mapped_column(Text, nullable=False)
 
     student: Mapped[User] = relationship("User")
@@ -197,3 +232,69 @@ class ChatLog(TimestampMixin, Base):
 
     def __repr__(self) -> str:
         return f"<ChatLog id={self.id} student={self.student_id}>"
+
+
+class Concept(TimestampMixin, Base):
+    __tablename__ = "concepts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    description: Mapped[str | None] = mapped_column(Text)
+
+    assignments: Mapped[list[Assignment]] = relationship(
+        "Assignment", secondary=assignment_concepts, back_populates="concepts"
+    )
+    questions: Mapped[list[AssignmentQuestion]] = relationship(
+        "AssignmentQuestion", secondary=question_concepts, back_populates="concepts"
+    )
+
+    def __repr__(self) -> str:
+        return f"<Concept id={self.id} name={self.name!r}>"
+
+
+class AssignmentQuestion(TimestampMixin, Base):
+    __tablename__ = "assignment_questions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    assignment_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("assignments.id", ondelete="CASCADE"), nullable=False
+    )
+    prompt: Mapped[str] = mapped_column(Text, nullable=False)
+    position: Mapped[int | None] = mapped_column(Integer)
+
+    assignment: Mapped[Assignment] = relationship("Assignment", back_populates="questions")
+    concepts: Mapped[list[Concept]] = relationship(
+        "Concept", secondary=question_concepts, back_populates="questions"
+    )
+
+    def __repr__(self) -> str:
+        return f"<AssignmentQuestion id={self.id} assignment={self.assignment_id}>"
+
+
+class UnderstandingScore(TimestampMixin, Base):
+    __tablename__ = "understanding_scores"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    student_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    assignment_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("assignments.id", ondelete="CASCADE"), nullable=False
+    )
+    question_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("assignment_questions.id", ondelete="SET NULL"), nullable=True
+    )
+    concept_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("concepts.id", ondelete="SET NULL"), nullable=True
+    )
+    score: Mapped[float] = mapped_column(Float, nullable=False)
+    confidence: Mapped[float | None] = mapped_column(Float)
+    source: Mapped[str | None] = mapped_column(String(64))
+
+    student: Mapped[User] = relationship("User")
+    assignment: Mapped[Assignment] = relationship("Assignment")
+    question: Mapped[AssignmentQuestion | None] = relationship("AssignmentQuestion")
+    concept: Mapped[Concept | None] = relationship("Concept")
+
+    def __repr__(self) -> str:
+        return f"<UnderstandingScore id={self.id} student={self.student_id}>"
