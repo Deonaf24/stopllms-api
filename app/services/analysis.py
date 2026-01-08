@@ -18,34 +18,11 @@ from app.schemas.analytics import (
     QuestionConceptLink,
 )
 from app.services.llm import ollama_generate
+from app.services.prompts import build_assignment_extraction_prompt, build_assignment_scoring_prompt
 
 
 class AssignmentAnalysisError(Exception):
     """Raised when assignment analysis fails."""
-
-
-def _build_assignment_extraction_prompt(text: str) -> str:
-    return (
-        "You are an assistant that extracts assignment structure.\n"
-        "Return ONLY valid JSON matching this schema:\n"
-        "{\n"
-        '  "concepts": [\n'
-        '    {"id": "C1", "name": "Concept name", "description": "optional"}\n'
-        "  ],\n"
-        '  "questions": [\n'
-        '    {"id": "Q1", "prompt": "question text", "position": 1}\n'
-        "  ],\n"
-        '  "question_concepts": [\n'
-        '    {"question_id": "Q1", "concept_id": "C1"}\n'
-        "  ],\n"
-        '  "assignment_concepts": [\n'
-        '    {"concept_id": "C1"}\n'
-        "  ]\n"
-        "}\n"
-        "If a field is unknown, return an empty list. Do not add extra keys.\n"
-        "Assignment content:\n"
-        f"{text}\n"
-    )
 
 
 def _extract_text_from_pdf(data: bytes) -> str:
@@ -126,7 +103,7 @@ async def analyze_assignment_structure(
     if not combined_text.strip():
         raise AssignmentAnalysisError("Assignment content was empty after extraction")
 
-    prompt = _build_assignment_extraction_prompt(combined_text)
+    prompt = build_assignment_extraction_prompt(combined_text)
     raw = ollama_generate(prompt)
     payload = _parse_llm_json(raw)
 
@@ -334,57 +311,6 @@ def apply_assignment_structure(
     )
 
 
-def _build_assignment_scoring_prompt(
-    assignment: Assignment,
-    questions: list[AssignmentQuestion],
-    concepts: list[Concept],
-    chat_logs: list[ChatLog],
-) -> str:
-    question_payload = [
-        {"id": question.id, "prompt": question.prompt, "position": question.position}
-        for question in questions
-    ]
-    concept_payload = [
-        {"id": concept.id, "name": concept.name, "description": concept.description}
-        for concept in concepts
-    ]
-    chat_payload = [
-        {
-            "student_id": log.student_id,
-            "question": log.question,
-            "created_at": log.created_at.isoformat(),
-        }
-        for log in chat_logs
-    ]
-
-    prompt_payload = {
-        "assignment_id": assignment.id,
-        "questions": question_payload,
-        "concepts": concept_payload,
-        "chat_logs": chat_payload,
-    }
-    return (
-        "You are scoring student understanding for an assignment.\n"
-        "Return ONLY valid JSON matching this schema:\n"
-        "{\n"
-        '  "scores": [\n'
-        '    {\n'
-        '      "student_id": 1,\n'
-        '      "question_id": 10,\n'
-        '      "concept_id": 5,\n'
-        '      "score": 0.75,\n'
-        '      "confidence": 0.6,\n'
-        '      "source": "ollama"\n'
-        "    }\n"
-        "  ]\n"
-        "}\n"
-        "Question_id or concept_id can be null if not applicable.\n"
-        "Scores must be between 0 and 1.\n"
-        "Assignment data:\n"
-        f"{json.dumps(prompt_payload, ensure_ascii=False)}\n"
-    )
-
-
 async def score_assignment_understanding(
     db: Session, assignment: Assignment
 ) -> list[UnderstandingScore]:
@@ -399,7 +325,26 @@ async def score_assignment_understanding(
     if not chat_logs:
         raise AssignmentAnalysisError("Assignment has no chat logs to score")
 
-    prompt = _build_assignment_scoring_prompt(assignment, questions, concepts, chat_logs)
+    prompt_payload = {
+        "assignment_id": assignment.id,
+        "questions": [
+            {"id": question.id, "prompt": question.prompt, "position": question.position}
+            for question in questions
+        ],
+        "concepts": [
+            {"id": concept.id, "name": concept.name, "description": concept.description}
+            for concept in concepts
+        ],
+        "chat_logs": [
+            {
+                "student_id": log.student_id,
+                "question": log.question,
+                "created_at": log.created_at.isoformat(),
+            }
+            for log in chat_logs
+        ],
+    }
+    prompt = build_assignment_scoring_prompt(prompt_payload)
     raw = ollama_generate(prompt)
     payload = _parse_llm_json(raw)
     score_entries = _normalize_score_entries(payload.get("scores"))
