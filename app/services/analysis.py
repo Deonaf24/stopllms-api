@@ -36,7 +36,20 @@ def _preview_text(text: str, limit: int = 500) -> str:
 
 def _extract_text_from_pdf(data: bytes) -> str:
     reader = PdfReader(BytesIO(data))
-    return "\n".join(page.extract_text() or "" for page in reader.pages)
+    if reader.is_encrypted:
+        try:
+            reader.decrypt("")
+            logger.info("Decrypted PDF with empty password")
+        except Exception:
+            logger.warning("Unable to decrypt PDF; text extraction may fail")
+
+    extracted_pages = []
+    for idx, page in enumerate(reader.pages):
+        text = page.extract_text() or ""
+        if not text.strip():
+            logger.warning("PDF page %s extracted no text", idx)
+        extracted_pages.append(text)
+    return "\n".join(extracted_pages)
 
 
 def _extract_text_from_bytes(data: bytes, filename: str | None, mime_type: str | None) -> str:
