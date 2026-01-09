@@ -29,15 +29,20 @@ logger = logging.getLogger(__name__)
 
 
 def _extract_text_from_pdf(data: bytes) -> str:
+    logger.info("PDF extraction started: bytes=%s", len(data))
     reader = PdfReader(BytesIO(data))
-    return "\n".join(page.extract_text() or "" for page in reader.pages)
+    text = "\n".join(page.extract_text() or "" for page in reader.pages)
+    logger.info("PDF extraction completed: chars=%s pages=%s", len(text), len(reader.pages))
+    return text
 
 
 def _extract_text_from_bytes(data: bytes, filename: str | None, mime_type: str | None) -> str:
     lowered_name = (filename or "").lower()
     if (mime_type and "pdf" in mime_type) or lowered_name.endswith(".pdf"):
         return _extract_text_from_pdf(data)
-    return data.decode("utf-8", errors="ignore")
+    text = data.decode("utf-8", errors="ignore")
+    logger.info("Plain text extraction completed: chars=%s filename=%s", len(text), filename)
+    return text
 
 
 def _parse_llm_json(raw: str) -> dict[str, Any]:
@@ -120,24 +125,74 @@ async def analyze_assignment_structure(
     extracted_texts = []
     for file in assignment.files:
         try:
+            logger.info(
+                "Reading assignment file: assignment_id=%s file_id=%s filename=%s mime_type=%s path=%s size=%s",
+                assignment.id,
+                file.id,
+                file.filename,
+                file.mime_type,
+                file.path,
+                file.size,
+            )
             data = await storage.open_file(file.path)
         except StorageError as exc:
+            logger.exception(
+                "Failed to read assignment file: assignment_id=%s file_id=%s path=%s",
+                assignment.id,
+                file.id,
+                file.path,
+            )
             raise AssignmentAnalysisError("Unable to read assignment file") from exc
+        logger.info(
+            "Read assignment file bytes: assignment_id=%s file_id=%s bytes=%s",
+            assignment.id,
+            file.id,
+            len(data),
+        )
         extracted_texts.append(_extract_text_from_bytes(data, file.filename, file.mime_type))
 
     combined_text = "\n\n".join(text for text in extracted_texts if text.strip())
+    logger.info(
+        "Combined extracted text: assignment_id=%s chars=%s non_empty_chunks=%s",
+        assignment.id,
+        len(combined_text),
+        sum(1 for text in extracted_texts if text.strip()),
+    )
     if not combined_text.strip():
         raise AssignmentAnalysisError("Assignment content was empty after extraction")
 
     prompt = build_assignment_extraction_prompt(combined_text)
+    logger.info(
+        "Assignment extraction prompt built: assignment_id=%s chars=%s",
+        assignment.id,
+        len(prompt),
+    )
     raw = ollama_generate(prompt)
-    logger.info("Assignment extraction raw output: %s", raw)
+    logger.info(
+        "Assignment extraction raw output received: assignment_id=%s chars=%s",
+        assignment.id,
+        len(raw or ""),
+    )
+    logger.debug("Assignment extraction raw output: assignment_id=%s raw=%s", assignment.id, raw)
     payload = _parse_llm_json(raw)
+    logger.info(
+        "Assignment extraction JSON parsed: assignment_id=%s keys=%s",
+        assignment.id,
+        list(payload.keys()) if isinstance(payload, dict) else "non-dict",
+    )
     normalized = _validate_extraction_payload(payload)
     concept_payloads = normalized["concepts"]
     question_payloads = normalized["questions"]
     question_concepts = normalized["question_concepts"]
     assignment_concepts = normalized["assignment_concepts"]
+    logger.info(
+        "Assignment extraction normalized counts: assignment_id=%s concepts=%s questions=%s question_concepts=%s assignment_concepts=%s",
+        assignment.id,
+        len(concept_payloads),
+        len(question_payloads),
+        len(question_concepts),
+        len(assignment_concepts),
+    )
 
     if not concept_payloads and not question_payloads:
         logger.warning("Extraction produced no structured data for assignment %s", assignment.id)
@@ -170,6 +225,7 @@ async def analyze_assignment_structure(
     assignment.questions.clear()
     assignment.concepts.clear()
     db.flush()
+    logger.info("Cleared existing assignment structure: assignment_id=%s", assignment.id)
 
     concept_map: dict[str, Concept] = {}
     concept_responses: list[ConceptPayload] = []
@@ -191,6 +247,11 @@ async def analyze_assignment_structure(
         concept_responses.append(
             ConceptPayload(id=concept_obj.id, name=concept_obj.name, description=concept_obj.description)
         )
+    logger.info(
+        "Concepts processed: assignment_id=%s created_or_reused=%s",
+        assignment.id,
+        len(concept_map),
+    )
 
     questions: dict[str, AssignmentQuestion] = {}
     question_responses: list[AssignmentQuestionPayload] = []
@@ -214,6 +275,11 @@ async def analyze_assignment_structure(
                 position=question_obj.position,
             )
         )
+    logger.info(
+        "Questions processed: assignment_id=%s created=%s",
+        assignment.id,
+        len(questions),
+    )
 
     question_concept_links: list[QuestionConceptLink] = []
     for link in question_concepts:
@@ -229,11 +295,21 @@ async def analyze_assignment_structure(
         question_concept_links.append(
             QuestionConceptLink(question_id=question_obj.id, concept_id=concept_obj.id)
         )
+    logger.info(
+        "Question concept links processed: assignment_id=%s links=%s",
+        assignment.id,
+        len(question_concept_links),
+    )
 
     assignment_concept_links = [
         AssignmentConceptLink(concept_id=concept_id)
         for concept_id in _link_assignment_concepts(assignment, concept_map, assignment_concepts)
     ]
+    logger.info(
+        "Assignment concept links processed: assignment_id=%s links=%s",
+        assignment.id,
+        len(assignment_concept_links),
+    )
 
     for response in question_responses:
         response.concept_ids = [
@@ -243,6 +319,7 @@ async def analyze_assignment_structure(
     assignment.structure_approved = False
     db.commit()
     db.refresh(assignment)
+    logger.info("Assignment analysis committed: assignment_id=%s", assignment.id)
 
     return AssignmentStructureReviewRead(
         assignment_id=assignment.id,
