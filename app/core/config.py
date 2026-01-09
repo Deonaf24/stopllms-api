@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     FILE_STORAGE_S3_REGION: str | None = None
     FILE_STORAGE_S3_ACCESS_KEY: str | None = None
     FILE_STORAGE_S3_SECRET_KEY: str | None = None
+    OLLAMA_MODEL: str = "llama3.1:8b"
 
     class Config:
         env_file = ".env"

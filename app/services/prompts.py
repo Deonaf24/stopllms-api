@@ -37,6 +37,53 @@ def build_prompt(req: PromptRequest, context_blocks: List[str]) -> str:
     )
 
 
+def build_assignment_extraction_prompt(text: str) -> str:
+    return (
+        "You are an assistant that extracts assignment structure.\n"
+        "Return ONLY valid JSON matching this schema:\n"
+        "{\n"
+        '  "concepts": [\n'
+        '    {"id": "C1", "name": "Concept name", "description": "optional"}\n'
+        "  ],\n"
+        '  "questions": [\n'
+        '    {"id": "Q1", "prompt": "question text", "position": 1}\n'
+        "  ],\n"
+        '  "question_concepts": [\n'
+        '    {"question_id": "Q1", "concept_id": "C1"}\n'
+        "  ],\n"
+        '  "assignment_concepts": [\n'
+        '    {"concept_id": "C1"}\n'
+        "  ]\n"
+        "}\n"
+        "If a field is unknown, return an empty list. Do not add extra keys.\n"
+        "Assignment content:\n"
+        f"{text}\n"
+    )
+
+
+def build_assignment_scoring_prompt(payload: dict) -> str:
+    return (
+        "You are scoring student understanding for an assignment.\n"
+        "Return ONLY valid JSON matching this schema:\n"
+        "{\n"
+        '  "scores": [\n'
+        '    {\n'
+        '      "student_id": 1,\n'
+        '      "question_id": 10,\n'
+        '      "concept_id": 5,\n'
+        '      "score": 0.75,\n'
+        '      "confidence": 0.6,\n'
+        '      "source": "ollama"\n'
+        "    }\n"
+        "  ]\n"
+        "}\n"
+        "Question_id or concept_id can be null if not applicable.\n"
+        "Scores must be between 0 and 1.\n"
+        "Assignment data:\n"
+        f"{payload}\n"
+    )
+
+
 def retrieve_context(db: Chroma, query: str, top_k: int = TOP_K, threshold: float = 0.2):
     docs = db.similarity_search_with_score(query, k=top_k)
     filtered_docs = [doc.page_content for doc, score in docs if score >= threshold]

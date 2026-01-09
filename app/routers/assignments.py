@@ -5,8 +5,19 @@ from fastapi.responses import RedirectResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
+from app.schemas.analytics import (
+    AssignmentStructureReview,
+    AssignmentStructureReviewRead,
+    UnderstandingScoreRead,
+)
 from app.schemas.school import AssignmentCreate, AssignmentRead, FileCreate, FileRead
 from app.services import assignments as assignments_service
+from app.services.analysis import (
+    AssignmentAnalysisError,
+    analyze_assignment_structure,
+    apply_assignment_structure,
+    score_assignment_understanding,
+)
 from app.services.rag import ingest_file
 from app.services.storage import StorageError, get_storage_service
 
@@ -59,6 +70,66 @@ def delete_assignments(db: Session = Depends(get_db)):
     db.commit()
 
     return deleted_items
+
+
+@router.post(
+    "/assignments/{assignment_id}/analyze",
+    response_model=AssignmentStructureReviewRead,
+)
+async def analyze_assignment(assignment_id: int, db: Session = Depends(get_db)):
+    assignment = assignments_service.get_assignment(db, assignment_id)
+    if not assignment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
+    try:
+        return await analyze_assignment_structure(db, assignment)
+    except AssignmentAnalysisError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.put(
+    "/assignments/{assignment_id}/structure",
+    response_model=AssignmentStructureReviewRead,
+)
+def update_assignment_structure(
+    assignment_id: int,
+    payload: AssignmentStructureReview,
+    db: Session = Depends(get_db),
+):
+    assignment = assignments_service.get_assignment(db, assignment_id)
+    if not assignment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
+    if payload.assignment_id != assignment_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Assignment ID mismatch")
+    return apply_assignment_structure(db, assignment, payload)
+
+
+@router.post(
+    "/assignments/{assignment_id}/score",
+    response_model=list[UnderstandingScoreRead],
+)
+async def score_assignment(assignment_id: int, db: Session = Depends(get_db)):
+    assignment = assignments_service.get_assignment(db, assignment_id)
+    if not assignment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
+    try:
+        scores = await score_assignment_understanding(db, assignment)
+    except AssignmentAnalysisError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return [
+        UnderstandingScoreRead(
+            id=score.id,
+            student_id=score.student_id,
+            assignment_id=score.assignment_id,
+            question_id=score.question_id,
+            concept_id=score.concept_id,
+            score=score.score,
+            confidence=score.confidence,
+            source=score.source,
+            created_at=score.created_at,
+            updated_at=score.updated_at,
+        )
+        for score in scores
+    ]
 
 
 # ============================================================

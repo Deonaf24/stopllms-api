@@ -18,3 +18,4 @@ chromadb
 pytest
 langchain-community
 pydantic-settings
+email-validator
