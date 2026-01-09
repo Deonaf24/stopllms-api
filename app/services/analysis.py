@@ -48,25 +48,28 @@ def _extract_text_from_bytes(data: bytes, filename: str | None, mime_type: str |
 
 def _parse_llm_json(raw: str) -> dict[str, Any]:
     try:
-        return json.loads(raw)
+        parsed = json.loads(raw)
     except json.JSONDecodeError:
-        match = re.search(r"\{.*\}", raw, re.DOTALL)
-        if not match:
-            logger.warning(
-                "Failed to parse JSON from model output; raw length=%s preview=%s",
-                len(raw),
-                _preview_text(raw),
-            )
-            return {}
+        parsed = None
+
+    if isinstance(parsed, dict):
+        return parsed
+
+    decoder = json.JSONDecoder()
+    for match in re.finditer(r"\{", raw):
         try:
-            return json.loads(match.group(0))
+            candidate, _ = decoder.raw_decode(raw[match.start() :])
         except json.JSONDecodeError:
-            logger.warning(
-                "Failed to parse JSON from extracted payload; payload length=%s preview=%s",
-                len(match.group(0)),
-                _preview_text(match.group(0)),
-            )
-            return {}
+            continue
+        if isinstance(candidate, dict):
+            return candidate
+
+    logger.warning(
+        "Failed to parse JSON from model output; raw length=%s preview=%s",
+        len(raw),
+        _preview_text(raw),
+    )
+    return {}
 
 
 def _normalize_list(value: Any) -> list[dict[str, Any]]:
