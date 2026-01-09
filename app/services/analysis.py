@@ -52,14 +52,20 @@ def _parse_llm_json(raw: str) -> dict[str, Any]:
     except json.JSONDecodeError:
         match = re.search(r"\{.*\}", raw, re.DOTALL)
         if not match:
-            logger.warning("Failed to parse JSON from model output")
-            logger.debug("Model output preview: %s", _preview_text(raw))
+            logger.warning(
+                "Failed to parse JSON from model output; raw length=%s preview=%s",
+                len(raw),
+                _preview_text(raw),
+            )
             return {}
         try:
             return json.loads(match.group(0))
         except json.JSONDecodeError:
-            logger.warning("Failed to parse JSON from extracted payload")
-            logger.debug("Extracted payload preview: %s", _preview_text(match.group(0)))
+            logger.warning(
+                "Failed to parse JSON from extracted payload; payload length=%s preview=%s",
+                len(match.group(0)),
+                _preview_text(match.group(0)),
+            )
             return {}
 
 
@@ -176,7 +182,11 @@ async def analyze_assignment_structure(
     assignment_concepts = normalized["assignment_concepts"]
 
     if not concept_payloads and not question_payloads:
-        logger.warning("Extraction produced no structured data for assignment %s", assignment.id)
+        logger.warning(
+            "Extraction produced no structured data for assignment %s; raw preview=%s",
+            assignment.id,
+            _preview_text(raw),
+        )
         return AssignmentStructureReviewRead(
             assignment_id=assignment.id,
             concepts=[
