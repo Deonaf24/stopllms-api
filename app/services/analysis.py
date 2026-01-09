@@ -28,6 +28,12 @@ class AssignmentAnalysisError(Exception):
 logger = logging.getLogger(__name__)
 
 
+def _preview_text(text: str, limit: int = 500) -> str:
+    if len(text) <= limit:
+        return text
+    return f"{text[:limit]}…"
+
+
 def _extract_text_from_pdf(data: bytes) -> str:
     reader = PdfReader(BytesIO(data))
     return "\n".join(page.extract_text() or "" for page in reader.pages)
@@ -47,11 +53,13 @@ def _parse_llm_json(raw: str) -> dict[str, Any]:
         match = re.search(r"\{.*\}", raw, re.DOTALL)
         if not match:
             logger.warning("Failed to parse JSON from model output")
+            logger.debug("Model output preview: %s", _preview_text(raw))
             return {}
         try:
             return json.loads(match.group(0))
         except json.JSONDecodeError:
             logger.warning("Failed to parse JSON from extracted payload")
+            logger.debug("Extracted payload preview: %s", _preview_text(match.group(0)))
             return {}
 
 
@@ -117,23 +125,51 @@ async def analyze_assignment_structure(
     if not assignment.files:
         raise AssignmentAnalysisError("Assignment has no files to analyze")
 
+    logger.info(
+        "Starting assignment analysis for assignment %s with %d file(s)",
+        assignment.id,
+        len(assignment.files),
+    )
     extracted_texts = []
     for file in assignment.files:
         try:
             data = await storage.open_file(file.path)
         except StorageError as exc:
             raise AssignmentAnalysisError("Unable to read assignment file") from exc
-        extracted_texts.append(_extract_text_from_bytes(data, file.filename, file.mime_type))
+        extracted_text = _extract_text_from_bytes(data, file.filename, file.mime_type)
+        extracted_texts.append(extracted_text)
+        logger.info(
+            "Extracted text from file_id=%s name=%s mime=%s bytes=%s chars=%s",
+            file.id,
+            file.filename,
+            file.mime_type,
+            len(data),
+            len(extracted_text),
+        )
 
     combined_text = "\n\n".join(text for text in extracted_texts if text.strip())
     if not combined_text.strip():
         raise AssignmentAnalysisError("Assignment content was empty after extraction")
 
     prompt = build_assignment_extraction_prompt(combined_text)
+    logger.info(
+        "Assignment %s extraction prompt length=%s chars; combined text length=%s chars",
+        assignment.id,
+        len(prompt),
+        len(combined_text),
+    )
     raw = ollama_generate(prompt)
     logger.info("Assignment extraction raw output: %s", raw)
     payload = _parse_llm_json(raw)
     normalized = _validate_extraction_payload(payload)
+    logger.info(
+        "Normalized extraction payload for assignment %s: %s concepts, %s questions, %s question links, %s assignment concepts",
+        assignment.id,
+        len(normalized["concepts"]),
+        len(normalized["questions"]),
+        len(normalized["question_concepts"]),
+        len(normalized["assignment_concepts"]),
+    )
     concept_payloads = normalized["concepts"]
     question_payloads = normalized["questions"]
     question_concepts = normalized["question_concepts"]
