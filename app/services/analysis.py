@@ -28,9 +28,28 @@ class AssignmentAnalysisError(Exception):
 logger = logging.getLogger(__name__)
 
 
+def _preview_text(text: str, limit: int = 500) -> str:
+    if len(text) <= limit:
+        return text
+    return f"{text[:limit]}…"
+
+
 def _extract_text_from_pdf(data: bytes) -> str:
     reader = PdfReader(BytesIO(data))
-    return "\n".join(page.extract_text() or "" for page in reader.pages)
+    if reader.is_encrypted:
+        try:
+            reader.decrypt("")
+            logger.info("Decrypted PDF with empty password")
+        except Exception:
+            logger.warning("Unable to decrypt PDF; text extraction may fail")
+
+    extracted_pages = []
+    for idx, page in enumerate(reader.pages):
+        text = page.extract_text() or ""
+        if not text.strip():
+            logger.warning("PDF page %s extracted no text", idx)
+        extracted_pages.append(text)
+    return "\n".join(extracted_pages)
 
 
 def _extract_text_from_bytes(data: bytes, filename: str | None, mime_type: str | None) -> str:
@@ -42,17 +61,28 @@ def _extract_text_from_bytes(data: bytes, filename: str | None, mime_type: str |
 
 def _parse_llm_json(raw: str) -> dict[str, Any]:
     try:
-        return json.loads(raw)
+        parsed = json.loads(raw)
     except json.JSONDecodeError:
-        match = re.search(r"\{.*\}", raw, re.DOTALL)
-        if not match:
-            logger.warning("Failed to parse JSON from model output")
-            return {}
+        parsed = None
+
+    if isinstance(parsed, dict):
+        return parsed
+
+    decoder = json.JSONDecoder()
+    for match in re.finditer(r"\{", raw):
         try:
-            return json.loads(match.group(0))
+            candidate, _ = decoder.raw_decode(raw[match.start() :])
         except json.JSONDecodeError:
-            logger.warning("Failed to parse JSON from extracted payload")
-            return {}
+            continue
+        if isinstance(candidate, dict):
+            return candidate
+
+    logger.warning(
+        "Failed to parse JSON from model output; raw length=%s preview=%s",
+        len(raw),
+        _preview_text(raw),
+    )
+    return {}
 
 
 def _normalize_list(value: Any) -> list[dict[str, Any]]:
@@ -117,30 +147,62 @@ async def analyze_assignment_structure(
     if not assignment.files:
         raise AssignmentAnalysisError("Assignment has no files to analyze")
 
+    logger.info(
+        "Starting assignment analysis for assignment %s with %d file(s)",
+        assignment.id,
+        len(assignment.files),
+    )
     extracted_texts = []
     for file in assignment.files:
         try:
             data = await storage.open_file(file.path)
         except StorageError as exc:
             raise AssignmentAnalysisError("Unable to read assignment file") from exc
-        extracted_texts.append(_extract_text_from_bytes(data, file.filename, file.mime_type))
+        extracted_text = _extract_text_from_bytes(data, file.filename, file.mime_type)
+        extracted_texts.append(extracted_text)
+        logger.info(
+            "Extracted text from file_id=%s name=%s mime=%s bytes=%s chars=%s",
+            file.id,
+            file.filename,
+            file.mime_type,
+            len(data),
+            len(extracted_text),
+        )
 
     combined_text = "\n\n".join(text for text in extracted_texts if text.strip())
     if not combined_text.strip():
         raise AssignmentAnalysisError("Assignment content was empty after extraction")
 
     prompt = build_assignment_extraction_prompt(combined_text)
+    logger.info(
+        "Assignment %s extraction prompt length=%s chars; combined text length=%s chars",
+        assignment.id,
+        len(prompt),
+        len(combined_text),
+    )
     raw = ollama_generate(prompt)
     logger.info("Assignment extraction raw output: %s", raw)
     payload = _parse_llm_json(raw)
     normalized = _validate_extraction_payload(payload)
+    logger.info(
+        "Normalized extraction payload for assignment %s: %s concepts, %s questions, %s question links, %s assignment concepts",
+        assignment.id,
+        len(normalized["concepts"]),
+        len(normalized["questions"]),
+        len(normalized["question_concepts"]),
+        len(normalized["assignment_concepts"]),
+    )
     concept_payloads = normalized["concepts"]
     question_payloads = normalized["questions"]
     question_concepts = normalized["question_concepts"]
     assignment_concepts = normalized["assignment_concepts"]
 
     if not concept_payloads and not question_payloads:
-        logger.warning("Extraction produced no structured data for assignment %s", assignment.id)
+        logger.warning(
+            "Extraction produced no structured data for assignment %s; raw preview=%s",
+            assignment.id,
+            _preview_text(raw),
+        )
         return AssignmentStructureReviewRead(
             assignment_id=assignment.id,
             concepts=[
