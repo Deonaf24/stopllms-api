@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import RedirectResponse, StreamingResponse
 from sqlalchemy.orm import Session
@@ -22,6 +24,7 @@ from app.services.rag import ingest_file
 from app.services.storage import StorageError, get_storage_service
 
 router = APIRouter(prefix="/school", tags=["school"])
+logger = logging.getLogger(__name__)
 
 
 @router.post(
@@ -77,13 +80,28 @@ def delete_assignments(db: Session = Depends(get_db)):
     response_model=AssignmentStructureReviewRead,
 )
 async def analyze_assignment(assignment_id: int, db: Session = Depends(get_db)):
+    logger.info("Analyze assignment request received: assignment_id=%s", assignment_id)
     assignment = assignments_service.get_assignment(db, assignment_id)
     if not assignment:
+        logger.warning("Analyze assignment failed: assignment_id=%s not found", assignment_id)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
     try:
+        logger.info(
+            "Analyze assignment starting: assignment_id=%s file_count=%s",
+            assignment.id,
+            len(assignment.files),
+        )
         return await analyze_assignment_structure(db, assignment)
     except AssignmentAnalysisError as exc:
+        logger.exception(
+            "Analyze assignment failed with analysis error: assignment_id=%s error=%s",
+            assignment_id,
+            exc,
+        )
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception:
+        logger.exception("Analyze assignment failed with unexpected error: assignment_id=%s", assignment_id)
+        raise
 
 
 @router.put(
