@@ -10,7 +10,7 @@ from app.schemas.analytics import (
     AssignmentStructureReviewRead,
     UnderstandingScoreRead,
 )
-from app.schemas.school import AssignmentCreate, AssignmentRead, FileCreate, FileRead
+from app.schemas.school import AssignmentCreate, AssignmentRead, AssignmentUpdate, FileCreate, FileRead
 from app.services import assignments as assignments_service
 from app.services.analysis import (
     AssignmentAnalysisError,
@@ -41,6 +41,18 @@ def list_assignments(db: Session = Depends(get_db)):
 @router.get("/assignments/{assignment_id}", response_model=AssignmentRead)
 def get_assignment(assignment_id: int, db: Session = Depends(get_db)):
     assignment = assignments_service.get_assignment(db, assignment_id)
+    if not assignment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
+    return assignments_service.assignment_to_schema(assignment)
+
+
+@router.put("/assignments/{assignment_id}", response_model=AssignmentRead)
+def update_assignment(
+    assignment_id: int,
+    assignment_in: AssignmentUpdate,
+    db: Session = Depends(get_db),
+):
+    assignment = assignments_service.update_assignment(db, assignment_id, assignment_in)
     if not assignment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
     return assignments_service.assignment_to_schema(assignment)
@@ -81,6 +93,7 @@ async def analyze_assignment(assignment_id: int, db: Session = Depends(get_db)):
     if not assignment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
     try:
+        print(f"DEBUG: STARTING ANALYSIS for Assignment {assignment_id}")
         return await analyze_assignment_structure(db, assignment)
     except AssignmentAnalysisError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
@@ -101,6 +114,45 @@ def update_assignment_structure(
     if payload.assignment_id != assignment_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Assignment ID mismatch")
     return apply_assignment_structure(db, assignment, payload)
+
+
+@router.get(
+    "/assignments/{assignment_id}/structure",
+    response_model=AssignmentStructureReviewRead,
+)
+def get_assignment_structure(assignment_id: int, db: Session = Depends(get_db)):
+    assignment = assignments_service.get_assignment(db, assignment_id)
+    if not assignment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
+    
+    # Construct response from existing relationships
+    # This logic mimics the "no-change" return of analyze_assignment_structure
+    
+    return AssignmentStructureReviewRead(
+        assignment_id=assignment.id,
+        concepts=[
+            {"id": c.id, "name": c.name, "description": c.description} 
+            for c in assignment.concepts
+        ],
+        questions=[
+            {
+                "id": q.id, 
+                "prompt": q.prompt, 
+                "position": q.position,
+                "concept_ids": [c.id for c in q.concepts]
+            }
+            for q in assignment.questions
+        ],
+        question_concepts=[
+            {"question_id": q.id, "concept_id": c.id}
+            for q in assignment.questions
+            for c in q.concepts
+        ],
+        assignment_concepts=[
+            {"concept_id": c.id} for c in assignment.concepts
+        ],
+        structure_approved=assignment.structure_approved,
+    )
 
 
 @router.post(

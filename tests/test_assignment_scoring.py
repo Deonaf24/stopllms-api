@@ -61,13 +61,13 @@ def test_score_assignment_understanding_persists_scores():
     db.add(chat_log)
     db.commit()
 
-    def _fake_ollama_generate(prompt: str, model: str | None = None) -> str:
+    def _fake_generate_text(prompt: str, model: str | None = None) -> str:
         return (
             '{"scores": [{"student_id": %d, "question_id": %d, "concept_id": %d, '
-            '"score": 0.8, "confidence": 0.7, "source": "ollama"}]}'
+            '"score": 0.8, "confidence": 0.7, "source": "gemini"}]}'
         ) % (student.id, question.id, concept.id)
 
-    assignment_analysis.ollama_generate = _fake_ollama_generate
+    assignment_analysis.generate_text = _fake_generate_text
 
     scores = asyncio.run(assignment_analysis.score_assignment_understanding(db, assignment))
     assert len(scores) == 1
@@ -129,10 +129,10 @@ def test_score_assignment_understanding_soft_fallback_keeps_existing_scores():
     )
     db.commit()
 
-    def _bad_ollama_generate(prompt: str, model: str | None = None) -> str:
+    def _bad_generate_text(prompt: str, model: str | None = None) -> str:
         return "not json"
 
-    assignment_analysis.ollama_generate = _bad_ollama_generate
+    assignment_analysis.generate_text = _bad_generate_text
 
     scores = asyncio.run(assignment_analysis.score_assignment_understanding(db, assignment))
     assert scores == []

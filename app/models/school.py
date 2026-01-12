@@ -39,6 +39,13 @@ question_concepts = Table(
     Column("concept_id", ForeignKey("concepts.id", ondelete="CASCADE"), primary_key=True),
 )
 
+material_concepts = Table(
+    "material_concepts",
+    Base.metadata,
+    Column("material_id", ForeignKey("materials.id", ondelete="CASCADE"), primary_key=True),
+    Column("concept_id", ForeignKey("concepts.id", ondelete="CASCADE"), primary_key=True),
+)
+
 
 class TimestampMixin:
     created_at: Mapped[datetime] = mapped_column(
@@ -111,6 +118,9 @@ class Teacher(TimestampMixin, Base):
     assignments: Mapped[list[Assignment]] = relationship(
         "Assignment", back_populates="teacher"
     )
+    materials: Mapped[list[Material]] = relationship(
+        "Material", back_populates="teacher"
+    )
 
     def __repr__(self) -> str:
         return f"<Teacher id={self.id} email={self.email!r}>"
@@ -157,6 +167,15 @@ class Class(TimestampMixin, Base):
     assignments: Mapped[list[Assignment]] = relationship(
         "Assignment", back_populates="class_", cascade="all, delete-orphan"
     )
+    announcements: Mapped[list[Announcement]] = relationship(
+        "Announcement", back_populates="class_", cascade="all, delete-orphan"
+    )
+    polls: Mapped[list[Poll]] = relationship(
+        "Poll", back_populates="class_", cascade="all, delete-orphan"
+    )
+    materials: Mapped[list[Material]] = relationship(
+        "Material", back_populates="class_", cascade="all, delete-orphan"
+    )
 
     def __repr__(self) -> str:
         return f"<Class id={self.id} name={self.name!r}>"
@@ -173,6 +192,7 @@ class Assignment(TimestampMixin, Base):
     class_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("classes.id", ondelete="CASCADE"), nullable=False
     )
+    level: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     teacher_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("teachers.id", ondelete="SET NULL"), nullable=True
     )
@@ -193,6 +213,32 @@ class Assignment(TimestampMixin, Base):
         return f"<Assignment id={self.id} title={self.title!r}>"
 
 
+class Material(TimestampMixin, Base):
+    __tablename__ = "materials"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    class_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("classes.id", ondelete="CASCADE"), nullable=False
+    )
+    teacher_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("teachers.id", ondelete="CASCADE"), nullable=False
+    )
+
+    class_: Mapped[Class] = relationship("Class", back_populates="materials")
+    teacher: Mapped[Teacher] = relationship("Teacher", back_populates="materials")
+    files: Mapped[list[File]] = relationship(
+        "File", back_populates="material", cascade="all, delete-orphan"
+    )
+    concepts: Mapped[list[Concept]] = relationship(
+        "Concept", secondary=material_concepts, back_populates="materials"
+    )
+
+    def __repr__(self) -> str:
+        return f"<Material id={self.id} title={self.title!r}>"
+
+
 class File(TimestampMixin, Base):
     __tablename__ = "files"
 
@@ -202,11 +248,23 @@ class File(TimestampMixin, Base):
     url: Mapped[str | None] = mapped_column(String(1024))
     mime_type: Mapped[str | None] = mapped_column(String(255))
     size: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    assignment_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("assignments.id", ondelete="CASCADE"), nullable=False
+    assignment_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("assignments.id", ondelete="CASCADE"), nullable=True
+    )
+    announcement_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("announcements.id", ondelete="CASCADE"), nullable=True
+    )
+    poll_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("polls.id", ondelete="CASCADE"), nullable=True
+    )
+    material_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("materials.id", ondelete="CASCADE"), nullable=True
     )
 
-    assignment: Mapped[Assignment] = relationship("Assignment", back_populates="files")
+    assignment: Mapped[Assignment | None] = relationship("Assignment", back_populates="files")
+    announcement: Mapped[Announcement | None] = relationship("Announcement", back_populates="files")
+    poll: Mapped[Poll | None] = relationship("Poll", back_populates="files")
+    material: Mapped[Material | None] = relationship("Material", back_populates="files")
 
     def __repr__(self) -> str:
         return f"<File id={self.id} filename={self.filename!r}>"
@@ -246,6 +304,9 @@ class Concept(TimestampMixin, Base):
     )
     questions: Mapped[list[AssignmentQuestion]] = relationship(
         "AssignmentQuestion", secondary=question_concepts, back_populates="concepts"
+    )
+    materials: Mapped[list[Material]] = relationship(
+        "Material", secondary=material_concepts, back_populates="concepts"
     )
 
     def __repr__(self) -> str:
@@ -298,3 +359,93 @@ class UnderstandingScore(TimestampMixin, Base):
 
     def __repr__(self) -> str:
         return f"<UnderstandingScore id={self.id} student={self.student_id}>"
+
+
+class Announcement(TimestampMixin, Base):
+    __tablename__ = "announcements"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False) # Acting as description/body
+    class_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("classes.id", ondelete="CASCADE"), nullable=False
+    )
+    author_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("teachers.id", ondelete="CASCADE"), nullable=False
+    )
+
+    class_: Mapped[Class] = relationship("Class", back_populates="announcements")
+    author: Mapped[Teacher] = relationship("Teacher")
+    files: Mapped[list[File]] = relationship(
+        "File", back_populates="announcement", cascade="all, delete-orphan"
+    )
+
+    def __repr__(self) -> str:
+        return f"<Announcement id={self.id}>"
+
+
+class Poll(TimestampMixin, Base):
+    __tablename__ = "polls"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    question: Mapped[str] = mapped_column(Text, nullable=False)
+    class_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("classes.id", ondelete="CASCADE"), nullable=False
+    )
+    author_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("teachers.id", ondelete="CASCADE"), nullable=False
+    )
+
+    class_: Mapped[Class] = relationship("Class", back_populates="polls")
+    author: Mapped[Teacher] = relationship("Teacher")
+    options: Mapped[list[PollOption]] = relationship(
+        "PollOption", back_populates="poll", cascade="all, delete-orphan"
+    )
+    files: Mapped[list[File]] = relationship(
+        "File", back_populates="poll", cascade="all, delete-orphan"
+    )
+
+    def __repr__(self) -> str:
+        return f"<Poll id={self.id} question={self.question!r}>"
+
+
+class PollOption(Base):
+    __tablename__ = "poll_options"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    poll_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("polls.id", ondelete="CASCADE"), nullable=False
+    )
+    text: Mapped[str] = mapped_column(String(255), nullable=False)
+    
+    poll: Mapped[Poll] = relationship("Poll", back_populates="options")
+    votes: Mapped[list[PollVote]] = relationship(
+        "PollVote", back_populates="option", cascade="all, delete-orphan"
+    )
+
+    def __repr__(self) -> str:
+        return f"<PollOption id={self.id} text={self.text!r}>"
+
+
+class PollVote(TimestampMixin, Base):
+    __tablename__ = "poll_votes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    poll_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("polls.id", ondelete="CASCADE"), nullable=False
+    )
+    option_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("poll_options.id", ondelete="CASCADE"), nullable=False
+    )
+    student_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("students.id", ondelete="CASCADE"), nullable=False
+    )
+
+    poll: Mapped[Poll] = relationship("Poll")
+    option: Mapped[PollOption] = relationship("PollOption", back_populates="votes")
+    student: Mapped[Student] = relationship("Student")
+
+    def __repr__(self) -> str:
+        return f"<PollVote id={self.id} student={self.student_id}>"

@@ -16,7 +16,10 @@ class Settings(BaseSettings):
     FILE_STORAGE_S3_REGION: str | None = None
     FILE_STORAGE_S3_ACCESS_KEY: str | None = None
     FILE_STORAGE_S3_SECRET_KEY: str | None = None
-    OLLAMA_MODEL: str = "llama3.1:8b"
+    LLM_PROVIDER: str = "gemini"  # "ollama" or "gemini"
+    OLLAMA_MODEL: str = "icarus-v3"
+    GEMINI_API_KEY: str | None = None
+    GEMINI_MODEL: str = "gemini-2.0-flash"
 
     class Config:
         env_file = ".env"

@@ -95,13 +95,18 @@ class AssignmentStructureReviewRead(AssignmentStructureReview):
 
 class AssignmentScoreSummary(BaseModel):
     assignment_id: int
+    assignment_title: str
     average_score: float
 
     @classmethod
     def from_row(cls, row) -> "AssignmentScoreSummary | None":
         if not row:
             return None
-        return cls(assignment_id=row.assignment_id, average_score=float(row.avg_score))
+        return cls(
+            assignment_id=row.assignment_id,
+            assignment_title=row.assignment_title,
+            average_score=float(row.avg_score)
+        )
 
 
 class ConceptScoreSummary(BaseModel):
@@ -138,6 +143,7 @@ class QuestionScoreSummary(BaseModel):
 
 class StudentScoreSummary(BaseModel):
     student_id: int
+    student_name: str
     average_score: float
 
 
@@ -150,12 +156,22 @@ class StudentAnalyticsRead(BaseModel):
     least_understood_concept: ConceptScoreSummary | None
 
 
+
+class WeaknessGroup(BaseModel):
+    concept_id: int
+    concept_name: str
+    students: list[StudentScoreSummary] = []
+    average_score: float
+
+
 class AssignmentAnalyticsRead(BaseModel):
     assignment_id: int
     most_understood_concept: ConceptScoreSummary | None
     least_understood_concept: ConceptScoreSummary | None
     most_understood_question: QuestionScoreSummary | None
     least_understood_question: QuestionScoreSummary | None
+    student_rankings: list[StudentScoreSummary] = []
+    weakness_groups: list[WeaknessGroup] = []
 
 
 class ClassAnalyticsRead(BaseModel):
@@ -163,3 +179,4 @@ class ClassAnalyticsRead(BaseModel):
     most_understood_assignment: AssignmentScoreSummary | None
     least_understood_assignment: AssignmentScoreSummary | None
     student_rankings: list[StudentScoreSummary]
+    weakness_groups: list[WeaknessGroup] = []

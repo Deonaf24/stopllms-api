@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from app.core.config import settings
-from app.routers import analytics, assignments, auth, classes, generate, rag, users
+from app.routers import analytics, assignments, auth, classes, generate, rag, users, stream, materials
 from fastapi.middleware.cors import CORSMiddleware
 
 def create_app() -> FastAPI:
@@ -22,6 +22,8 @@ def create_app() -> FastAPI:
     app.include_router(classes.router, tags=["school"])
     app.include_router(assignments.router, tags=["school"])
     app.include_router(analytics.router)
+    app.include_router(stream.router)
+    app.include_router(materials.router)
     return app
 
 app = create_app()

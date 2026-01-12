@@ -39,41 +39,57 @@ def build_prompt(req: PromptRequest, context_blocks: List[str]) -> str:
 
 def build_assignment_extraction_prompt(text: str) -> str:
     return (
-        "You are an assistant that extracts assignment structure.\n"
-        "Return ONLY valid JSON matching this schema:\n"
-        "{\n"
-        '  "concepts": [\n'
-        '    {"id": "C1", "name": "Concept name", "description": "optional"}\n'
-        "  ],\n"
-        '  "questions": [\n'
-        '    {"id": "Q1", "prompt": "question text", "position": 1}\n'
-        "  ],\n"
-        '  "question_concepts": [\n'
-        '    {"question_id": "Q1", "concept_id": "C1"}\n'
-        "  ],\n"
-        '  "assignment_concepts": [\n'
-        '    {"concept_id": "C1"}\n'
-        "  ]\n"
-        "}\n"
-        "If a field is unknown, return an empty list. Do not add extra keys.\n"
-        "Assignment content:\n"
+        "You are an expert educational content analyzer.\n"
+        "Your task: Extract key concepts and all questions/problems from the text content below.\n\n"
+        "Output Format: JSON.\n"
+        "The JSON object must contain exactly these keys:\n"
+        "1. 'concepts': A list of concept objects. Each must have 'id' (integer), 'name' (string topic), and 'description' (string summary).\n"
+        "2. 'questions': A list of question objects. Each must have 'id' (integer), 'prompt' (string text of the question/task), and 'position' (integer order).\n"
+        "3. 'question_concepts': A list of links. Each has 'question_id' and 'concept_id'.\n"
+        "4. 'assignment_concepts': A list of links. Each has 'concept_id'.\n\n"
+        "IMPORTANT:\n"
+        "- Extract REAL data from the text. Do not use placeholders.\n"
+        "- 'questions' should include any exercises, problems, or numbered tasks found.\n"
+        "- Generate a comprehensive description for each concept based on the text.\n\n"
+        "Assignment Text:\n"
+        "----------------\n"
         f"{text}\n"
+        "----------------\n"
+        "JSON Response:"
+    )
+
+
+def build_material_extraction_prompt(text: str) -> str:
+    return (
+        "You are an expert educational content analyzer.\n"
+        "Your task: Extract key concepts from the text content below.\n\n"
+        "Output Format: JSON.\n"
+        "The JSON object must contain exactly one key: 'concepts'.\n"
+        "1. 'concepts': A list of concept objects. Each must have 'name' (string topic) and 'description' (string summary).\n\n"
+        "IMPORTANT:\n"
+        "- Extract REAL concepts from the text. Do not use placeholders.\n"
+        "- Generate a comprehensive description for each concept based on the text.\n\n"
+        "Material Text:\n"
+        "----------------\n"
+        f"{text}\n"
+        "----------------\n"
+        "JSON Response:"
     )
 
 
 def build_assignment_scoring_prompt(payload: dict) -> str:
     return (
-        "You are scoring student understanding for an assignment.\n"
-        "Return ONLY valid JSON matching this schema:\n"
+        "You are scoring student understanding based on chat logs.\n"
+        "Return ONLY valid JSON matching this schema exactly. Do not include markdown formatting like ```json ... ``` or any other text.\n"
         "{\n"
         '  "scores": [\n'
         '    {\n'
-        '      "student_id": 1,\n'
-        '      "question_id": 10,\n'
-        '      "concept_id": 5,\n'
-        '      "score": 0.75,\n'
-        '      "confidence": 0.6,\n'
-        '      "source": "ollama"\n'
+        '      "student_id": <int>,\n'
+        '      "question_id": <int|null>,\n'
+        '      "concept_id": <int|null>,\n'
+        '      "score": <float 0.0-1.0>,\n'
+        '      "confidence": <float 0.0-1.0>,\n'
+        '      "source": "gemini"\n'
         "    }\n"
         "  ]\n"
         "}\n"
@@ -89,3 +105,28 @@ def retrieve_context(db: Chroma, query: str, top_k: int = TOP_K, threshold: floa
     filtered_docs = [doc.page_content for doc, score in docs if score >= threshold]
     print(filtered_docs)
     return filtered_docs
+
+
+def build_live_event_generation_prompt(concepts: List[str], text: str, time_limit: int) -> str:
+    concept_list = ", ".join(concepts)
+    return (
+        "You are an expert exam creator.\n"
+        f"Your task: Generate multiple-choice questions for a {time_limit}-minute live quiz session on the following topics: {concept_list}.\n\n"
+        "Output Format: JSON.\n"
+        "The JSON object must contain exactly one key: 'questions'.\n"
+        "1. 'questions': A list of objects. Each must have:\n"
+        "   - 'id': integer (1-indexed)\n"
+        "   - 'text': string (the question)\n"
+        "   - 'options': list of 4 strings\n"
+        "   - 'correct_index': integer (0-3)\n"
+        "   - 'explanation': string (short explanation of why it is correct)\n\n"
+        "IMPORTANT:\n"
+        "- Questions should test understanding of the provided context.\n"
+        "- Difficulty should be appropriate for the content level.\n"
+        "- Ensure strictly valid JSON output.\n\n"
+        "Context Material:\n"
+        "----------------\n"
+        f"{text}\n"
+        "----------------\n"
+        "JSON Response:"
+    )

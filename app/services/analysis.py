@@ -18,7 +18,7 @@ from app.schemas.analytics import (
     ConceptPayload,
     QuestionConceptLink,
 )
-from app.services.llm import ollama_generate
+from app.services.llm import generate_text
 from app.services.prompts import build_assignment_extraction_prompt, build_assignment_scoring_prompt
 
 
@@ -37,20 +37,40 @@ def _extract_text_from_bytes(data: bytes, filename: str | None, mime_type: str |
     lowered_name = (filename or "").lower()
     if (mime_type and "pdf" in mime_type) or lowered_name.endswith(".pdf"):
         return _extract_text_from_pdf(data)
+    
+    # We cannot extract text from images without OCR dependencies
+    if (mime_type and "image" in mime_type) or lowered_name.endswith((".png", ".jpg", ".jpeg", ".gif", ".webp")):
+        logger.warning("Skipping image file %s as OCR is not available", filename)
+        return ""
+
     return data.decode("utf-8", errors="ignore")
 
 
 def _parse_llm_json(raw: str) -> dict[str, Any]:
+    # Try to clean markdown code blocks first
+    if "```" in raw:
+        match = re.search(r"```(?:json)?(.*?)```", raw, re.DOTALL)
+        if match:
+            raw = match.group(1).strip()
+            
+    # Fix invalid escape sequences (common in Latex/Math content from LLMs)
+    # Replaces backslash with double-backslash unless it's a valid JSON escape char
+    raw = re.sub(r'\\(?![/u"bfnrt\\])', r'\\\\', raw)
+    
     try:
         return json.loads(raw)
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
+        print(f"DEBUG: JSON Direct Parse Failed: {e}")
+        # Fallback regex for {}
         match = re.search(r"\{.*\}", raw, re.DOTALL)
         if not match:
             logger.warning("Failed to parse JSON from model output")
             return {}
         try:
             return json.loads(match.group(0))
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e2:
+            print(f"DEBUG: JSON Regex Parse Failed: {e2}")
+            print(f"DEBUG: Raw Tail (last 100 chars): {raw[-100:]}")
             logger.warning("Failed to parse JSON from extracted payload")
             return {}
 
@@ -117,20 +137,49 @@ async def analyze_assignment_structure(
     if not assignment.files:
         raise AssignmentAnalysisError("Assignment has no files to analyze")
 
+    from app.core.config import settings
+
     extracted_texts = []
+    file_payloads = []
     for file in assignment.files:
         try:
             data = await storage.open_file(file.path)
-        except StorageError as exc:
-            raise AssignmentAnalysisError("Unable to read assignment file") from exc
-        extracted_texts.append(_extract_text_from_bytes(data, file.filename, file.mime_type))
+            extracted_texts.append(_extract_text_from_bytes(data, file.filename, file.mime_type))
+            if settings.LLM_PROVIDER == "gemini":
+                file_payloads.append({"data": data, "mime_type": file.mime_type})
+        except Exception as exc:
+            logger.exception(
+                "Failed to extract text from assignment file: assignment_id=%s file_id=%s",
+                assignment.id,
+                file.id,
+            )
+            # We continue even if one file fails, using whatever text was extracted
 
     combined_text = "\n\n".join(text for text in extracted_texts if text.strip())
-    if not combined_text.strip():
+    
+    logger.info("Extracted text length: %d", len(combined_text))
+    # print(f"DEBUG: Extracted text length: {len(combined_text)}")
+    
+    if not combined_text.strip() and not file_payloads:
+        # If no text and no files (if using Gemini), we can't proceed
         raise AssignmentAnalysisError("Assignment content was empty after extraction")
 
-    prompt = build_assignment_extraction_prompt(combined_text)
-    raw = ollama_generate(prompt)
+    # If sending files to Gemini, we don't need to embed the text in the prompt
+    prompt_text = combined_text
+    files_to_send = None
+    
+    if settings.LLM_PROVIDER == "gemini" and file_payloads:
+         prompt_text = "Refer to the attached documents for the assignment content."
+         files_to_send = file_payloads
+
+    prompt = build_assignment_extraction_prompt(prompt_text)
+    try:
+        print("DEBUG: Calling Gemini..." if settings.LLM_PROVIDER == "gemini" else "DEBUG: Calling Ollama...")
+        raw = generate_text(prompt, files=files_to_send)
+        print(f"DEBUG: LLM returned: {raw[:200]}...")
+    except Exception as exc:
+        logger.exception("Assignment analysis LLM failure: assignment_id=%s", assignment.id)
+        raise AssignmentAnalysisError("Analysis service unavailable") from exc
     logger.info("Assignment extraction raw output: %s", raw)
     payload = _parse_llm_json(raw)
     normalized = _validate_extraction_payload(payload)
@@ -400,7 +449,7 @@ async def score_assignment_understanding(
         ],
     }
     prompt = build_assignment_scoring_prompt(prompt_payload)
-    raw = ollama_generate(prompt)
+    raw = generate_text(prompt)
     logger.info("Assignment scoring raw output: %s", raw)
     payload = _parse_llm_json(raw)
     score_entries = _normalize_score_entries(payload.get("scores"))

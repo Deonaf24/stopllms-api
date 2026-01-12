@@ -7,10 +7,17 @@ from sqlalchemy.orm import Session
 from app.models.school import Assignment, AssignmentQuestion, Concept, File
 
 if TYPE_CHECKING:
-    from app.schemas.school import AssignmentCreate, AssignmentRead, FileCreate, FileRead
+    from app.schemas.school import (
+        AssignmentCreate,
+        AssignmentRead,
+        AssignmentUpdate,
+        FileCreate,
+        FileRead,
+    )
 
 __all__ = [
     "create_assignment",
+    "update_assignment",
     "list_assignments",
     "get_assignment",
     "delete_assignment",
@@ -26,6 +33,26 @@ __all__ = [
 
 def create_assignment(db: Session, assignment_in: AssignmentCreate) -> Assignment:
     assignment = Assignment(**assignment_in.model_dump())
+    db.add(assignment)
+    db.commit()
+    db.refresh(assignment)
+    return assignment
+
+
+def update_assignment(
+    db: Session, assignment_id: int, assignment_in: AssignmentUpdate
+) -> Assignment | None:
+    assignment = db.get(Assignment, assignment_id)
+    if not assignment:
+        return None
+
+    update_data = assignment_in.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        if field == "file_ids": 
+            # Skipping manual file_ids update for now as it handles relationship
+            continue 
+        setattr(assignment, field, value)
+
     db.add(assignment)
     db.commit()
     db.refresh(assignment)
@@ -93,6 +120,7 @@ def assignment_to_schema(assignment: Assignment) -> AssignmentRead:
         due_at=assignment.due_at,
         class_id=assignment.class_id,
         teacher_id=assignment.teacher_id,
+        level=assignment.level,
         created_at=assignment.created_at,
         updated_at=assignment.updated_at,
         file_ids=[file.id for file in assignment.files],
