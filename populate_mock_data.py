@@ -104,8 +104,55 @@ def populate():
                     
             print(f"Created assignment '{assignment.title}' with analytics data.")
 
+        # 4. Create Chapters and Link Concepts
+        print("Creating Chapters...")
+        from app.models.school import Chapter  # Late import to ensure it's available
+
+        chapters_data = [
+            {
+                "title": "Calculus Foundations",
+                "description": "Introduction to limits and derivatives.",
+                "concept_names": ["Limits", "Derivatives"]
+            },
+            {
+                "title": "Physics Integration",
+                "description": "Applying algebra to kinematics.",
+                "concept_names": ["Velocity", "Acceleration"]
+            },
+            {
+                "title": "Historical Context", 
+                "description": "History related concepts.",
+                "concept_names": ["Industrial Revolution", "Imperialism"]
+            }
+        ]
+
+        for i, c_data in enumerate(chapters_data):
+            # Check if chapter exists
+            chapter = db.query(Chapter).filter(Chapter.title == c_data["title"], Chapter.class_id == class_.id).first()
+            if not chapter:
+                chapter = Chapter(
+                    title=c_data["title"],
+                    description=c_data["description"],
+                    class_id=class_.id,
+                    order=i
+                )
+                db.add(chapter)
+                db.flush()
+                print(f"Created chapter: {chapter.title}")
+            
+            # Link Concepts
+            current_concepts = db.query(Concept).filter(Concept.name.in_(c_data["concept_names"])).all()
+            
+            # Re-fetch chapter to access relationships if it was just created (though flush handles ID, relationship loading might need object consistency)
+            # existing_ids = {c.id for c in chapter.concepts} 
+            # Simplified link logic:
+            for conc in current_concepts:
+                if conc not in chapter.concepts:
+                    chapter.concepts.append(conc)
+                    print(f"  Linked concept '{conc.name}' to '{chapter.title}'")
+
         db.commit()
-        print("Successfully added mock assignments!")
+        print("Successfully added mock assignments and chapters!")
 
     except Exception as e:
         print(f"Error: {e}")

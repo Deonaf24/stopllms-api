@@ -1,0 +1,6 @@
+INFO:     Will watch for changes in these directories: ['/Users/deon/Documents/LocalFiles/Socratica/Icarus-API']
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [49168] using WatchFiles
+INFO:     Started server process [49292]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.

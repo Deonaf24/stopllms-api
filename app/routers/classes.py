@@ -5,8 +5,8 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.schemas.school import ClassCreate, ClassRead, JoinClassRequest
-from app.services import classes as classes_service
-from app.services import users as users_service
+from app.services.school import classes as classes_service
+from app.services.school import users as users_service
 
 router = APIRouter(prefix="/school", tags=["school"])
 
@@ -72,22 +72,11 @@ def get_class_concepts(class_id: int, db: Session = Depends(get_db)):
     if not class_obj:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Class not found")
     
-    # Simple aggregation of unique concepts through assignments
-    unique_concepts = {}
-    for assignment in class_obj.assignments:
-        for concept in assignment.concepts:
-            if concept.id not in unique_concepts:
-                unique_concepts[concept.id] = {
-                    "id": concept.id,
-                    "name": concept.name,
-                    "description": concept.description
-                }
-    
-    return list(unique_concepts.values())
+    return classes_service.get_class_concepts(class_obj)
 
 
 from app.schemas.live_events import LiveQueryRequest, LiveQueryResponse
-from app.services.live_events import generate_live_event_prompt
+from app.services.school.live_events import generate_live_event_prompt
 
 @router.post("/classes/{class_id}/live/generate", response_model=LiveQueryResponse)
 async def generate_live_questions(

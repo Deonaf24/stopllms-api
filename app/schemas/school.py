@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, date, time
 from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, EmailStr
@@ -21,11 +21,17 @@ class TeacherCreate(BaseModel):
     name: str
     email: EmailStr
 
+class TeacherUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    profile_picture_url: Optional[str] = None
+
 class TeacherRead(TeacherBase, TimestampModel):
     id: int
     user_id: int
     name: str | None = None
     email: EmailStr | None = None
+    profile_picture_url: str | None = None
     class_ids: List[int] = Field(default_factory=list)
     assignment_ids: List[int] = Field(default_factory=list)
 
@@ -38,11 +44,18 @@ class StudentCreate(BaseModel):
     name: str
     email: EmailStr
 
+class StudentUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    profile_picture_url: Optional[str] = None
+
 class StudentRead(StudentBase, TimestampModel):
     id: int
     user_id: int
     name: str | None = None
     email: EmailStr | None = None
+    profile_picture_url: str | None = None
+    google_id: str | None = None
     class_ids: List[int] = Field(default_factory=list)
 
 
@@ -51,11 +64,29 @@ class ClassBase(BaseModel):
     description: Optional[str] = None
     teacher_id: Optional[int] = None
     join_code: Optional[str] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+
+
+class LectureBase(BaseModel):
+    day_of_week: int
+    start_time: time
+    duration_minutes: int
+
+class LectureCreate(LectureBase):
+    pass
+
+class LectureRead(LectureBase):
+    id: int
+    class_id: int
+    start_time: time
+    
+    model_config = ConfigDict(from_attributes=True)
 
 
 
 class ClassCreate(ClassBase):
-    pass
+    lectures: List[LectureCreate] = Field(default_factory=list)
 
 
 class ClassRead(ClassBase, TimestampModel):
@@ -63,7 +94,13 @@ class ClassRead(ClassBase, TimestampModel):
     student_ids: List[int] = Field(default_factory=list)
     assignment_ids: List[int] = Field(default_factory=list)
     material_ids: List[int] = Field(default_factory=list)
+    lectures: List[LectureRead] = Field(default_factory=list)
+    material_ids: List[int] = Field(default_factory=list)
+    lectures: List[LectureRead] = Field(default_factory=list)
     join_code: str
+    
+    google_id: str | None = None
+    is_google_synced: bool = False
 
 
 class AssignmentBase(BaseModel):
@@ -88,9 +125,19 @@ class AssignmentUpdate(BaseModel):
 
 
 
+class StudentAssignmentInfo(BaseModel):
+    student_id: int
+    status: str | None = None
+    grade: float | None = None
+    google_submission_id: str | None = None
+
 class AssignmentRead(AssignmentBase, TimestampModel):
     id: int
     file_ids: List[int] = Field(default_factory=list)
+    google_id: str | None = None
+    google_link: str | None = None
+    submission: Optional[StudentAssignmentInfo] = None # For the requesting student
+    all_submissions: List[StudentAssignmentInfo] = Field(default_factory=list) # For teachers (all students)
 
 
 class MaterialBase(BaseModel):

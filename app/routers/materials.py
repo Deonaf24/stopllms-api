@@ -4,10 +4,10 @@ from sqlalchemy.orm import Session
 from app.core.db import get_db
 from app.schemas.school import MaterialCreate, MaterialRead, FileRead, FileCreate
 from app.schemas.analytics import ConceptRead
-from app.services import materials as materials_service
-from app.services import assignments as assignments_service # Fallback for file schema
+from app.services.school import materials as materials_service
+from app.services.school import assignments as assignments_service # Fallback for file schema
 from app.services.storage import StorageError, get_storage_service
-from app.services.rag import ingest_file
+from app.services.ai import ingest_file
 
 router = APIRouter(prefix="/school", tags=["school"])
 

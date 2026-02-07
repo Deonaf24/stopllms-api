@@ -180,3 +180,18 @@ class ClassAnalyticsRead(BaseModel):
     least_understood_assignment: AssignmentScoreSummary | None
     student_rankings: list[StudentScoreSummary]
     weakness_groups: list[WeaknessGroup] = []
+    class_status: str | None = None
+    class_status_color: str | None = None
+
+
+class ConceptScoreNode(BaseModel):
+    concept_id: int
+    concept_name: str
+    understanding_score: float # 0.0 to 1.0
+
+
+class ChapterAnalyticsRead(BaseModel):
+    chapter_id: int
+    chapter_title: str
+    understanding_score: float # 0.0 to 1.0
+    concepts: list[ConceptScoreNode] = []

@@ -7,3 +7,4 @@ class PromptRequest(BaseModel):
     subject: str
     user_message: str
     history: str
+    class_id: str | None = None
