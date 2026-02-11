@@ -30,7 +30,25 @@ router = APIRouter(prefix="/school", tags=["school"])
 @router.post(
     "/assignments", response_model=AssignmentRead, status_code=status.HTTP_201_CREATED
 )
-def create_assignment(assignment_in: AssignmentCreate, db: Session = Depends(get_db)):
+def create_assignment(
+    assignment_in: AssignmentCreate, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    if not current_user.teacher_link:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, 
+            detail="Only teachers can create assignments"
+        )
+    # Ensure they are creating it for themselves or we overwrite it
+    if assignment_in.teacher_id != current_user.teacher_link.id:
+        # Strict mode: force it to their ID or error?
+        # Let's error to be safe and clear
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot create assignment for another teacher"
+        )
+        
     assignment = assignments_service.create_assignment(db, assignment_in)
     return assignments_service.assignment_to_schema(assignment)
 
@@ -91,22 +109,47 @@ def get_assignment(
 
 
 @router.put("/assignments/{assignment_id}", response_model=AssignmentRead)
+@router.put("/assignments/{assignment_id}", response_model=AssignmentRead)
 def update_assignment(
     assignment_id: int,
     assignment_in: AssignmentUpdate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
 ):
-    assignment = assignments_service.update_assignment(db, assignment_id, assignment_in)
+    assignment = assignments_service.get_assignment(db, assignment_id)
     if not assignment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
+        
+    # Security Check
+    if not current_user.teacher_link:
+         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only teachers can update assignments")
+         
+    if assignment.teacher_id != current_user.teacher_link.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot update another teacher's assignment")
+
+    assignment = assignments_service.update_assignment(db, assignment_id, assignment_in)
     return assignments_service.assignment_to_schema(assignment)
 
 
 @router.delete("/assignments/{assignment_id}", response_model=AssignmentRead)
-def delete_assignment(assignment_id: int, db: Session = Depends(get_db)):
-    assignment = assignments_service.delete_assignment(db, assignment_id)
+@router.delete("/assignments/{assignment_id}", response_model=AssignmentRead)
+def delete_assignment(
+    assignment_id: int, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    assignment = assignments_service.get_assignment(db, assignment_id)
     if not assignment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
+        
+    # Security Check
+    if not current_user.teacher_link:
+         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only teachers can delete assignments")
+         
+    if assignment.teacher_id != current_user.teacher_link.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot delete another teacher's assignment")
+
+    assignment = assignments_service.delete_assignment(db, assignment_id)
     return assignments_service.assignment_to_schema(assignment)
 
 

@@ -11,12 +11,33 @@ from app.schemas.analytics import (
     ChapterAnalyticsRead
 )
 from app.services.analysis import analytics as analytics_service
+from app.services.school import users as users_service
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
 
 @router.get("/students/{student_id}", response_model=StudentAnalyticsRead)
-def get_student_analytics(student_id: int, db: Session = Depends(get_db)):
+def get_student_analytics(
+    student_id: int, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    # 1. If user is a student, they can only view their own stats
+    if current_user.student_link:
+        if current_user.student_link.id != student_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, 
+                detail="Cannot view another student's analytics"
+            )
+            
+    # 2. If user is a teacher, they can view any (or maybe restricted to their classes? simple check for now)
+    if current_user.teacher_link:
+        pass # Allow teachers to view student stats
+        
+    student = users_service.get_student(db, student_id)
+    if not student:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
+
     return analytics_service.get_student_analytics(db, student_id)
 
 

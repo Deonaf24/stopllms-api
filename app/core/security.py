@@ -21,9 +21,7 @@ def get_user_from_db(email: str) -> UserModel | None:
         return answer
 
 
-def get_user(email: str):
-    db = SessionLocal()
-
+def get_user(email: str, db: Session):
     user = (
         db.query(UserModel)
         .options(selectinload(UserModel.teacher_link))
@@ -40,8 +38,8 @@ def verify_password(plain_password, hashed_password):
 def get_password_hash(password):
     return pwd_context.hash(password)
     
-def authenticate_user(email: str, password: str):
-    user = get_user(email)
+def authenticate_user(email: str, password: str, db: Session):
+    user = get_user(email, db)
     if not user:
         return False
     if not verify_password(password, user.hashed_password):

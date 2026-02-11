@@ -1,4 +1,10 @@
 
+import sys
+import os
+# Add project root to sys.path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+
+
 from app.services.prompts import build_assignment_extraction_prompt
 from app.services.llm import generate_text
 import logging

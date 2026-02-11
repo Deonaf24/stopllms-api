@@ -1,3 +1,9 @@
+
+import sys
+import os
+# Add project root to sys.path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+
 import sys
 import os
 import asyncio
@@ -10,7 +16,7 @@ sys.path.append(current_dir)
 from app.core.db import SessionLocal
 from app.models.school import Assignment
 from app.services.analysis import score_assignment_understanding
-from app.services import analytics as analytics_service
+from app.services.analysis import analytics as analytics_service
 
 async def run_scoring():
     db = SessionLocal()
