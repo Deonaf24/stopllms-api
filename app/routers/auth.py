@@ -17,9 +17,10 @@ from app.core.db import SessionLocal, Session, get_db
 router = APIRouter()
 
 @router.post("/token", response_model=Token)
-async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
+@router.post("/token", response_model=Token)
+async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     print("authenticating")
-    user = authenticate_user(form_data.username, form_data.password)
+    user = authenticate_user(form_data.username, form_data.password, db)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                             detail="Incorrect username or password", headers={"WWW-Authenticate": "Bearer"})
@@ -33,17 +34,17 @@ async def read_users_me(current_user: User = Depends(get_current_active_user)):
     return current_user
 
 @router.post("/register", response_model=User)
-async def register_user(new_user: UserCreate):
-    with SessionLocal() as db:
-        new_user_db = auth_service.create_user(db, new_user)
+@router.post("/register", response_model=User)
+async def register_user(new_user: UserCreate, db: Session = Depends(get_db)):
+    new_user_db = auth_service.create_user(db, new_user)
 
-        return {
-            "id": new_user_db.id,
-            "username": new_user_db.username,
-            "email": new_user_db.email,
-            "is_teacher": new_user.is_teacher,
-            "disabled": new_user_db.disabled,
-        }
+    return {
+        "id": new_user_db.id,
+        "username": new_user_db.username,
+        "email": new_user_db.email,
+        "is_teacher": new_user.is_teacher,
+        "disabled": new_user_db.disabled,
+    }
 
 @router.get("/users", response_model=list[User])
 def list_users(db: Session = Depends(get_db)):

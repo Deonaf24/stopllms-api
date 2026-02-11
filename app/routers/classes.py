@@ -5,6 +5,8 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.schemas.school import ClassCreate, ClassRead, JoinClassRequest
+from app.core.deps import get_current_active_user
+from app.models.school import User, Student
 from app.services.school import classes as classes_service
 from app.services.school import users as users_service
 
@@ -12,7 +14,33 @@ router = APIRouter(prefix="/school", tags=["school"])
 
 
 @router.post("/classes", response_model=ClassRead, status_code=status.HTTP_201_CREATED)
-def create_class(class_in: ClassCreate, db: Session = Depends(get_db)):
+def create_class(
+    class_in: ClassCreate, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user) # Only teachers
+):
+    # 1. Check if user is a teacher
+    if not current_user.teacher_link:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, 
+            detail="Only teachers can create classes"
+        )
+    
+    # 2. Check if they are creating it for themselves
+    if class_in.teacher_id != current_user.teacher_link.id:
+         raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot create class for another teacher"
+        )
+
+    # 3. Validate dates
+    if class_in.end_date and class_in.start_date:
+        if class_in.end_date < class_in.start_date:
+             raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="End date cannot be before start date"
+            )
+
     class_obj = classes_service.create_class(db, class_in)
     return classes_service.class_to_schema(class_obj)
 

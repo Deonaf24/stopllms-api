@@ -1,3 +1,9 @@
+
+import sys
+import os
+# Add project root to sys.path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+
 import sys
 import os
 
@@ -8,7 +14,7 @@ sys.path.append(current_dir)
 from app.core.db import SessionLocal
 from app.models.school import Assignment, UnderstandingScore, Student
 from sqlalchemy import func
-from app.services import analytics as analytics_service
+from app.services.analysis import analytics as analytics_service
 
 def debug():
     db = SessionLocal()
