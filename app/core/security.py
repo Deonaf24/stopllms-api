@@ -14,21 +14,19 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
 
 # Helper function to get the user model from the DB
-def get_user_from_db(username: str) -> UserModel | None:
-    """Queries the database for a user by username."""
+def get_user_from_db(email: str) -> UserModel | None:
+    """Queries the database for a user by email."""
     with SessionLocal() as db:
-        answer = db.query(UserModel).filter(UserModel.username == username).first()
+        answer = db.query(UserModel).filter(UserModel.email == email).first()
         return answer
 
 
-def get_user(username: str):
-    db = SessionLocal()
-
+def get_user(email: str, db: Session):
     user = (
         db.query(UserModel)
         .options(selectinload(UserModel.teacher_link))
         .options(selectinload(UserModel.student_link))
-        .filter(UserModel.username == username)
+        .filter(UserModel.email == email)
         .first()
     )
 
@@ -40,8 +38,8 @@ def verify_password(plain_password, hashed_password):
 def get_password_hash(password):
     return pwd_context.hash(password)
     
-def authenticate_user(username: str, password: str):
-    user = get_user(username)
+def authenticate_user(email: str, password: str, db: Session):
+    user = get_user(email, db)
     if not user:
         return False
     if not verify_password(password, user.hashed_password):

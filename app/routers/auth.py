@@ -1,27 +1,32 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from datetime import timedelta
+import requests
 from app.core.security import authenticate_user, create_access_token
 from app.core.deps import get_current_active_user
 from app.models.school import Student, Teacher
-from app.schemas.auth import Token, User, UserCreate
+from app.schemas.auth import Token, User, UserCreate, GoogleLoginRequest
 from fastapi.security import OAuth2PasswordRequestForm
 from app.core.config import settings
 from app.schemas.school import StudentCreate, TeacherCreate
 from app.services import auth as auth_service
+from app.services.google_classroom import service as google_classroom_service
 from app.core.db import SessionLocal, Session, get_db
+
+
 
 router = APIRouter()
 
 @router.post("/token", response_model=Token)
-async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
+@router.post("/token", response_model=Token)
+async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     print("authenticating")
-    user = authenticate_user(form_data.username, form_data.password)
+    user = authenticate_user(form_data.username, form_data.password, db)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                             detail="Incorrect username or password", headers={"WWW-Authenticate": "Bearer"})
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.username}, expires_delta=access_token_expires)
+        data={"sub": user.email}, expires_delta=access_token_expires)
     return {"access_token": access_token, "token_type": "bearer"}
 
 @router.get("/users/me/", response_model=User)
@@ -29,17 +34,17 @@ async def read_users_me(current_user: User = Depends(get_current_active_user)):
     return current_user
 
 @router.post("/register", response_model=User)
-async def register_user(new_user: UserCreate):
-    with SessionLocal() as db:
-        new_user_db = auth_service.create_user(db, new_user)
+@router.post("/register", response_model=User)
+async def register_user(new_user: UserCreate, db: Session = Depends(get_db)):
+    new_user_db = auth_service.create_user(db, new_user)
 
-        return {
-            "id": new_user_db.id,
-            "username": new_user_db.username,
-            "email": new_user_db.email,
-            "is_teacher": new_user.is_teacher,
-            "disabled": new_user_db.disabled,
-        }
+    return {
+        "id": new_user_db.id,
+        "username": new_user_db.username,
+        "email": new_user_db.email,
+        "is_teacher": new_user.is_teacher,
+        "disabled": new_user_db.disabled,
+    }
 
 @router.get("/users", response_model=list[User])
 def list_users(db: Session = Depends(get_db)):
@@ -60,3 +65,8 @@ def delete_user(user_id: int, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     return user
+
+# Google OAuth2
+@router.post("/auth/google", response_model=Token)
+async def google_login(login_request: GoogleLoginRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    return auth_service.process_google_login(db, login_request, background_tasks)
