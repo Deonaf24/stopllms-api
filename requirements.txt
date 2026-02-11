@@ -18,8 +18,3 @@ chromadb
 pytest
 langchain-community
 pydantic-settings
-email-validator
-google-genai
-google-auth
-google-api-python-client
-google-auth-oauthlib

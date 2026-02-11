@@ -1,18 +1,16 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.schemas.school import (
     StudentCreate,
     StudentRead,
-    StudentUpdate,
     TeacherCreate,
     TeacherRead,
-    TeacherUpdate,
 )
-from app.services.school import users as users_service
+from app.services import users as users_service
 
 router = APIRouter(prefix="/school", tags=["school"])
 
@@ -55,41 +53,3 @@ def get_student(student_id: int, db: Session = Depends(get_db)):
     if not student:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
     return users_service.student_to_schema(student)
-
-
-@router.put("/teachers/{teacher_id}", response_model=TeacherRead)
-def update_teacher(teacher_id: int, teacher_in: TeacherUpdate, db: Session = Depends(get_db)):
-    teacher = users_service.get_teacher(db, teacher_id)
-    if not teacher:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Teacher not found")
-    
-    teacher = users_service.update_teacher(db, teacher, teacher_in)
-    return users_service.teacher_to_schema(teacher)
-
-
-@router.put("/students/{student_id}", response_model=StudentRead)
-def update_student(student_id: int, student_in: StudentUpdate, db: Session = Depends(get_db)):
-    student = users_service.get_student(db, student_id)
-    if not student:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
-    
-    student = users_service.update_student(db, student, student_in)
-    return users_service.student_to_schema(student)
-
-
-@router.post("/users/avatar", status_code=status.HTTP_201_CREATED)
-async def upload_avatar(
-    file: UploadFile,  # Assuming this import from fastapi is available or I need to add it
-):
-    from app.services.storage import get_storage_service, StorageError # Local import to avoid circular dependency if any, or just convenience
-
-    storage = get_storage_service()
-    try:
-        stored = await storage.save_upload(upload=file, folder="avatars")
-    except StorageError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Unable to save avatar",
-        ) from exc
-        
-    return {"url": stored.url}

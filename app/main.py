@@ -1,15 +1,10 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from app.core.config import settings
-from app.core.db import engine, Base
-from app.models import school # Ensure models are registered
-from app.routers import analytics, assignments, auth, classes, generate, rag, users, stream, materials, chapters, live, calendar, integrations
+from app.routers import assignments, auth, classes, generate, rag, users
 from fastapi.middleware.cors import CORSMiddleware
 
 def create_app() -> FastAPI:
-    # Ensure tables exist
-    Base.metadata.create_all(bind=engine)
-
     app = FastAPI()
     if settings.FILE_STORAGE_BACKEND.lower() == "local" and settings.FILE_STORAGE_BASE_URL:
         mount_path = settings.FILE_STORAGE_BASE_URL.rstrip("/") or "/"
@@ -26,13 +21,6 @@ def create_app() -> FastAPI:
     app.include_router(users.router, tags=["school"])
     app.include_router(classes.router, tags=["school"])
     app.include_router(assignments.router, tags=["school"])
-    app.include_router(analytics.router)
-    app.include_router(stream.router)
-    app.include_router(materials.router)
-    app.include_router(chapters.router, tags=["school"])
-    app.include_router(live.router)
-    app.include_router(calendar.router)
-    app.include_router(integrations.router, prefix="/integrations", tags=["integrations"])
     return app
 
 app = create_app()
@@ -41,7 +29,10 @@ app = create_app()
 def healthz():
     return {"ok": True}
 
-origins = settings.BACKEND_CORS_ORIGINS
+origins = [
+    "http://localhost:3000",   # Next.js dev
+    "http://127.0.0.1:3000",   # sometimes this variant is used
+]
 
 app.add_middleware(
     CORSMiddleware,

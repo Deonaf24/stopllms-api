@@ -1,22 +1,7 @@
 """SQLAlchemy models for the StopLLMS API."""
 
 from .base import Base
-from .school import (
-    Assignment, 
-    Class, 
-    File, 
-    Student, 
-    Teacher, 
-    Chapter,
-    class_students,
-    chapter_assignments,
-    chapter_concepts,
-    chapter_materials,
-    LiveSession,
-    LiveQuestion,
-    LiveResponse,
-)
-from .calendar import CalendarEvent
+from .school import Assignment, Class, File, Student, Teacher, class_students
 
 __all__ = [
     "Assignment",
@@ -25,14 +10,5 @@ __all__ = [
     "File",
     "Student",
     "Teacher",
-    "Chapter",
     "class_students",
-    "chapter_assignments",
-    "chapter_concepts",
-    "chapter_materials",
-    "LiveSession",
-    "LiveQuestion",
-    "LiveResponse",
-    "CalendarEvent",
 ]
-

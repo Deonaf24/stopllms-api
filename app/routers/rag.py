@@ -3,8 +3,8 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.core.deps import get_current_active_user
-from app.services.school import assignments as assignments_service
-from app.services.ai import ingest_file, clear_database
+from app.services import assignments as assignments_service
+from app.services.rag import ingest_file, clear_database
 
 router = APIRouter()
 
