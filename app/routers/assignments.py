@@ -5,9 +5,23 @@ from fastapi.responses import RedirectResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.schemas.school import AssignmentCreate, AssignmentRead, FileCreate, FileRead
-from app.services import assignments as assignments_service
-from app.services.rag import ingest_file
+from app.core.deps import get_current_user, get_current_active_user
+from app.models.school import User, StudentAssignment, Student
+from app.schemas.analytics import (
+    AssignmentStructureReview,
+    AssignmentStructureReviewRead,
+    UnderstandingScoreRead,
+)
+from app.schemas.school import AssignmentCreate, AssignmentRead, AssignmentUpdate, FileCreate, FileRead
+from app.services.school import assignments as assignments_service
+from app.services.analysis import (
+    AssignmentAnalysisError,
+    analyze_assignment_structure,
+    apply_assignment_structure,
+    score_assignment_understanding,
+)
+from app.services.ai import ingest_file
+from app.services.google_classroom import service as google_service
 from app.services.storage import StorageError, get_storage_service
 
 router = APIRouter(prefix="/school", tags=["school"])
@@ -28,8 +42,61 @@ def list_assignments(db: Session = Depends(get_db)):
 
 
 @router.get("/assignments/{assignment_id}", response_model=AssignmentRead)
-def get_assignment(assignment_id: int, db: Session = Depends(get_db)):
+def get_assignment(
+    assignment_id: int, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user) # We need user to personalize response
+):
     assignment = assignments_service.get_assignment(db, assignment_id)
+    if not assignment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
+    
+    schema = assignments_service.assignment_to_schema(assignment)
+    
+    
+    # Populate submission info
+    # 1. For Student (their own)
+    if current_user.student_link:
+        sub = db.query(StudentAssignment).filter(
+            StudentAssignment.assignment_id == assignment_id,
+            StudentAssignment.student_id == current_user.id
+        ).first()
+        
+        if sub:
+             from app.schemas.school import StudentAssignmentInfo
+             schema.submission = StudentAssignmentInfo(
+                 student_id=sub.student_id,
+                 status=sub.status,
+                 grade=sub.grade,
+                 google_submission_id=sub.google_submission_id
+             )
+
+    # 2. For Teacher (all students)
+    if current_user.teacher_link:
+        all_subs = db.query(StudentAssignment).filter(
+            StudentAssignment.assignment_id == assignment_id
+        ).all()
+        
+        from app.schemas.school import StudentAssignmentInfo
+        schema.all_submissions = [
+            StudentAssignmentInfo(
+                student_id=s.student_id,
+                status=s.status,
+                grade=s.grade,
+                google_submission_id=s.google_submission_id
+            ) for s in all_subs
+        ]
+
+    return schema
+
+
+@router.put("/assignments/{assignment_id}", response_model=AssignmentRead)
+def update_assignment(
+    assignment_id: int,
+    assignment_in: AssignmentUpdate,
+    db: Session = Depends(get_db),
+):
+    assignment = assignments_service.update_assignment(db, assignment_id, assignment_in)
     if not assignment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
     return assignments_service.assignment_to_schema(assignment)
@@ -59,6 +126,128 @@ def delete_assignments(db: Session = Depends(get_db)):
     db.commit()
 
     return deleted_items
+
+
+@router.post(
+    "/assignments/{assignment_id}/analyze",
+    response_model=AssignmentStructureReviewRead,
+)
+async def analyze_assignment(assignment_id: int, db: Session = Depends(get_db)):
+    assignment = assignments_service.get_assignment(db, assignment_id)
+    if not assignment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
+    try:
+        print(f"DEBUG: STARTING ANALYSIS for Assignment {assignment_id}")
+        return await analyze_assignment_structure(db, assignment)
+    except AssignmentAnalysisError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post(
+    "/assignments/{assignment_id}/sync",
+    response_model=AssignmentRead,
+)
+def sync_assignment(assignment_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
+    """
+    Manually triggers a sync of a specific assignment from Google Classroom.
+    """
+    assignment = assignments_service.get_assignment(db, assignment_id)
+    if not assignment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
+
+    # Permission check: usually only teachers or the student themselves?
+    # Students might want to sync their own status if cache is stale.
+    # Service handles token check.
+    
+    google_service.sync_assignment(db, current_user, assignment_id)
+    
+    # Return fresh data
+    # We call get_assignment logic again to populate special fields
+    return get_assignment(assignment_id, db, current_user)
+
+@router.put(
+    "/assignments/{assignment_id}/structure",
+    response_model=AssignmentStructureReviewRead,
+)
+def update_assignment_structure(
+    assignment_id: int,
+    payload: AssignmentStructureReview,
+    db: Session = Depends(get_db),
+):
+    assignment = assignments_service.get_assignment(db, assignment_id)
+    if not assignment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
+    if payload.assignment_id != assignment_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Assignment ID mismatch")
+    return apply_assignment_structure(db, assignment, payload)
+
+
+@router.get(
+    "/assignments/{assignment_id}/structure",
+    response_model=AssignmentStructureReviewRead,
+)
+def get_assignment_structure(assignment_id: int, db: Session = Depends(get_db)):
+    assignment = assignments_service.get_assignment(db, assignment_id)
+    if not assignment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
+    
+    # Construct response from existing relationships
+    # This logic mimics the "no-change" return of analyze_assignment_structure
+    
+    return AssignmentStructureReviewRead(
+        assignment_id=assignment.id,
+        concepts=[
+            {"id": c.id, "name": c.name, "description": c.description} 
+            for c in assignment.concepts
+        ],
+        questions=[
+            {
+                "id": q.id, 
+                "prompt": q.prompt, 
+                "position": q.position,
+                "concept_ids": [c.id for c in q.concepts]
+            }
+            for q in assignment.questions
+        ],
+        question_concepts=[
+            {"question_id": q.id, "concept_id": c.id}
+            for q in assignment.questions
+            for c in q.concepts
+        ],
+        assignment_concepts=[
+            {"concept_id": c.id} for c in assignment.concepts
+        ],
+        structure_approved=assignment.structure_approved,
+    )
+
+
+@router.post(
+    "/assignments/{assignment_id}/score",
+    response_model=list[UnderstandingScoreRead],
+)
+async def score_assignment(assignment_id: int, db: Session = Depends(get_db)):
+    assignment = assignments_service.get_assignment(db, assignment_id)
+    if not assignment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
+    try:
+        scores = await score_assignment_understanding(db, assignment)
+    except AssignmentAnalysisError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return [
+        UnderstandingScoreRead(
+            id=score.id,
+            student_id=score.student_id,
+            assignment_id=score.assignment_id,
+            question_id=score.question_id,
+            concept_id=score.concept_id,
+            score=score.score,
+            confidence=score.confidence,
+            source=score.source,
+            created_at=score.created_at,
+            updated_at=score.updated_at,
+        )
+        for score in scores
+    ]
 
 
 # ============================================================
@@ -106,7 +295,7 @@ async def upload_file(
 
     storage = get_storage_service()
     try:
-        stored = await storage.save_upload(upload=upload, assignment_id=assignment_id)
+        stored = await storage.save_upload(upload=upload, folder=f"assignments/{assignment_id}")
     except StorageError as exc:  # pragma: no cover - passthrough
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

@@ -5,7 +5,7 @@ class Token(BaseModel):
     token_type: str
 
 class TokenData(BaseModel):
-    username: str | None = None
+    email: str | None = None
 
 # --------------------
 # PUBLIC SCHEMAS
@@ -13,8 +13,10 @@ class TokenData(BaseModel):
 
 class User(BaseModel):
     id: int
-    username: str
+    username: str | None = None
     email: EmailStr
+    first_name: str | None = None
+    last_name: str | None = None
     is_teacher: bool
     disabled: bool
 
@@ -23,7 +25,14 @@ class User(BaseModel):
 # --------------------
 
 class UserCreate(BaseModel):
-    username: str
+    username: str | None = None # Deprecated
+    first_name: str
+    last_name: str
     email: EmailStr
     password: str
     is_teacher: bool
+
+class GoogleLoginRequest(BaseModel):
+    id_token: str | None = None
+    code: str | None = None
+    is_teacher: bool = False # Optional, mainly for new registrations
