@@ -36,3 +36,4 @@ class GoogleLoginRequest(BaseModel):
     id_token: str | None = None
     code: str | None = None
     is_teacher: bool = False # Optional, mainly for new registrations
+    is_signup: bool = False # Must be True to allow new user creation

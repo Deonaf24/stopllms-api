@@ -168,6 +168,13 @@ def process_google_login(db: Session, login_request: GoogleLoginRequest, backgro
     user = get_user_by_email(db, email=email)
     
     if not user:
+        if not login_request.is_signup:
+            print(f"User not found and is_signup=False. Rejecting login for: {email}")
+            raise HTTPException(
+                status_code=401, 
+                detail="User not found. Please sign up first."
+            )
+
         print(f"User not found, registering new user: {email}")
         first_name = id_info.get("given_name", "")
         last_name = id_info.get("family_name", "")

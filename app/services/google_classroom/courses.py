@@ -1,5 +1,6 @@
 from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from app.models.school import Class, User
 from app.services.google_classroom.converters import convert_course_to_class_dict
 
@@ -69,10 +70,21 @@ class GoogleCourseService:
                     teacher_id=class_data["teacher_id"], 
                     is_google_synced=True
                 )
-                db.add(new_class)
-                db.flush() # Flush to get ID
-                synced_classes.append(new_class)
-                existing_class = new_class
+                
+                try:
+                    with db.begin_nested():
+                        db.add(new_class)
+                        db.flush() # Flush to get ID
+                    synced_classes.append(new_class)
+                    existing_class = new_class
+                except IntegrityError:
+                    print(f"Race condition detected for course {g_course['id']}, re-fetching.")
+                    existing_class = db.query(Class).filter(Class.google_id == g_course["id"]).first()
+                    if existing_class:
+                        synced_classes.append(existing_class)
+                    else:
+                        print(f"Failed to recover existing class for {g_course['id']}")
+                        continue
                 
                 # If Teacher, sync work
                 if teacher:

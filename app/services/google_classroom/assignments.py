@@ -1,5 +1,6 @@
 from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 import asyncio
 
 from app.models.school import Class, User, Assignment, File
@@ -66,9 +67,19 @@ class GoogleAssignmentService:
                 assignment_obj = existing_assignment
             else:
                 new_assignment = Assignment(**assignment_data)
-                db.add(new_assignment)
-                db.flush() # Need ID for files
-                assignment_obj = new_assignment
+                try:
+                    with db.begin_nested():
+                        db.add(new_assignment)
+                        db.flush() # Need ID for files
+                    assignment_obj = new_assignment
+                except IntegrityError:
+                    print(f"Race condition detected for assignment {work['id']}, re-fetching.")
+                    existing_assignment = db.query(Assignment).filter(Assignment.google_id == work["id"]).first()
+                    if existing_assignment:
+                        assignment_obj = existing_assignment
+                    else:
+                        print(f"Failed to recover existing assignment for {work['id']}")
+                        continue
         
             # Handle Attachments (Materials)
             materials = work.get("materials", [])
